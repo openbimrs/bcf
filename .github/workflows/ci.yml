@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Rust gate
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust 1.85
+        uses: dtolnay/rust-toolchain@bc540ba06a4ccee415bb241490e0b25ee8e7d315 # 1.85.0
+        with:
+          components: rustfmt, clippy
+      - name: Fetch official BCF references
+        # CC BY-ND, so fetched rather than vendored. Non-fatal: the corpus
+        # tests skip cleanly when absent, and an upstream outage must not be
+        # indistinguishable from a code defect.
+        continue-on-error: true
+        run: ./scripts/fetch-official-references.py
+      - name: Run verified gate
+        run: ./scripts/gate.sh
+      - name: Run mutation probes
+        run: ./scripts/mutation-probes.py

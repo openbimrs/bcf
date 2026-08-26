@@ -1,0 +1,18 @@
+/target
+**/*.rs.bk
+*.pdb
+.DS_Store
+*.swp
+.idea/
+.vscode/
+.hermes/
+__pycache__/
+*.py[cod]
+
+# Official BCF references are downloaded locally by
+# scripts/fetch-official-references.py. They are CC BY-ND 4.0 (c) buildingSMART
+# International Ltd. and are deliberately NOT vendored into this MIT repository:
+# mixing them in would misrepresent the licence of the tree. Only the hash
+# manifest is tracked. scripts/check-references-untracked.sh enforces this.
+/references/schemas/
+/references/test-cases/
