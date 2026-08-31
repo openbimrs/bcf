@@ -78,20 +78,20 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
     (
         "missing bcf.version not reported",
         "openbim-bcf/src/archive.rs",
-        "                diagnostics.push(Diagnostic::in_archive(Tolerance::MissingVersionEntry));\n                None\n            }\n            Some((index, name)) => {",
-        "                None\n            }\n            Some((index, name)) => {",
+        "    let Some((index, name)) = &scan.version else {\n        diagnostics.push(Diagnostic::in_archive(Tolerance::MissingVersionEntry));\n        return None;\n    };",
+        "    let Some((index, name)) = &scan.version else {\n        return None;\n    };",
     ),
     (
         "path traversal entry tolerated instead of refused",
         "openbim-bcf/src/archive.rs",
-        "            if file.enclosed_name().is_none() {\n                return Err(BcfError::UnsafeEntry { name: raw });\n            }",
+        "        if file.enclosed_name().is_none() {\n            return Err(BcfError::UnsafeEntry { name: raw });\n        }",
         "",
     ),
     (
         "total uncompressed size limit not enforced",
         "openbim-bcf/src/archive.rs",
-        "            if declared_total > limits.max_total_uncompressed {",
-        "            if false && declared_total > limits.max_total_uncompressed {",
+        "        if declared_total > limits.max_total_uncompressed {",
+        "        if false && declared_total > limits.max_total_uncompressed {",
     ),
     (
         "empty archive returns an empty result instead of an error",
@@ -102,14 +102,14 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
     (
         "backslash entry names not normalised",
         "openbim-bcf/src/archive.rs",
-        "            let name = raw.replace('\\\\', \"/\");",
-        "            let name = raw.clone();",
+        "        let name = raw.replace('\\\\', \"/\");",
+        "        let name = raw.clone();",
     ),
     (
         "dangling viewpoint references not reported",
         "openbim-bcf/src/archive.rs",
-        "        diagnostics.extend(dangling);",
-        "        let _ = dangling;",
+        "        diagnostics.extend(dangling_references(&markups, &scan.entries));",
+        "        let _ = dangling_references(&markups, &scan.entries);",
     ),
     (
         "blank XML values treated as present",
