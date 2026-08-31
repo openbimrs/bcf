@@ -2,7 +2,7 @@
 """Fetch and verify official BCF references for local development.
 
 The buildingSMART BCF specifications are licensed CC BY-ND 4.0. That permits
-redistribution of verbatim copies, but this repository is MIT and vendoring a
+redistribution of verbatim copies, but this repository is AGPL-3.0-or-later and vendoring a
 differently-licensed corpus into it would misrepresent the licence of the tree.
 So the payload is downloaded on demand, hash-pinned in SOURCE-MANIFEST.json,
 and gitignored.
@@ -166,7 +166,7 @@ def write_manifest(archives: dict[str, dict[str, object]]) -> None:
             "bcf-api": "https://github.com/buildingSMART/BCF-API",
             "license": "CC BY-ND 4.0 (c) buildingSMART International Ltd.",
             "note": (
-                "Not vendored: this repository is MIT and the reference corpus is not. "
+                "Not vendored: this repository is AGPL-3.0-or-later and the reference corpus is not. "
                 "Fetch locally; the payload directories are gitignored."
             ),
         },

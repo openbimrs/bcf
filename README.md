@@ -125,5 +125,5 @@ The official corpus is fetched, not vendored (CC BY-ND); see
 
 ## Licence
 
-MIT. The buildingSMART reference corpus this crate is tested against is *not*
-MIT and is never committed here.
+Repository-authored code is AGPL-3.0-or-later. The buildingSMART reference
+corpus is CC BY-ND 4.0 and is never committed here.

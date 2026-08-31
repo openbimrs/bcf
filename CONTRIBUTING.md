@@ -15,8 +15,8 @@ coverage or move a "not implemented" row in the README to "implemented".
 4. Add tests before claiming behaviour. Prefer synthesised fixtures in
    `tests/archive.rs` — they are hermetic and licence-clean.
 5. Do not commit buildingSMART schemas or test cases. They are CC BY-ND and
-   this repository is MIT; `scripts/check-references-untracked.sh` will fail
-   the gate. Fetch them with `scripts/fetch-official-references.py`.
+   this repository is AGPL-3.0-or-later; the
+   `scripts/check-references-untracked.sh` gate rejects them. Fetch them with `scripts/fetch-official-references.py`.
 6. Run:
 
 ```bash
@@ -54,3 +54,10 @@ let `Detected::Inferred` or a declared version stand — do not guess.
 
 Use focused commits with imperative subjects. Cross-repository changes publish
 this crate first and update the `openbimrs/openbim` submodule pin last.
+
+## Licensing contributions
+
+Unless an explicitly signed agreement says otherwise, every contribution
+submitted to this repository is licensed under `AGPL-3.0-or-later`. Submit only
+work that you have the right to license. Identify third-party material and
+preserve its license, attribution, and provenance.

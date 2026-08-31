@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prove the CC BY-ND reference corpus never enters this MIT repository.
+# Prove the CC BY-ND reference corpus never enters this AGPL-3.0-or-later repository.
 #
 # This is an executable licence boundary, not a style check: committing
 # buildingSMART payload would misrepresent the licence of the whole tree, and

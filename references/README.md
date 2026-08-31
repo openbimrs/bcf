@@ -5,7 +5,7 @@ Unmodified buildingSMART BCF specifications, downloaded on demand.
 ## 🚨 Why these are not committed
 
 The BCF specifications are licensed **CC BY-ND 4.0, (c) buildingSMART
-International Ltd.** This repository is MIT. Vendoring a differently-licensed
+International Ltd.** This repository is AGPL-3.0-or-later. Vendoring a differently-licensed
 corpus into the tree would misrepresent the licence of the whole repository, so
 the payload directories are gitignored and fetched locally instead.
 

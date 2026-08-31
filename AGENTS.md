@@ -36,7 +36,7 @@ Trust command exit codes. Never summarise a Cargo pipeline through
 5. Untrusted-input failures (path traversal, limit breach) are hard errors and
    are never downgraded to diagnostics.
 6. Official reference bytes stay untracked; they are CC BY-ND and this repo is
-   MIT. `scripts/check-references-untracked.sh` enforces it.
+   AGPL-3.0-or-later. `scripts/check-references-untracked.sh` enforces it.
 7. Read and write support are tracked separately. Never describe writing,
    viewpoint geometry, or project extensions as implemented without executable
    evidence.

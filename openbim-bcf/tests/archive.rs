@@ -2,7 +2,7 @@
 //!
 //! Fixtures are built in-memory rather than committed, for two reasons: the
 //! official buildingSMART test cases are CC BY-ND and the third-party corpus
-//! is other people's project data, so neither may be vendored into this MIT
+//! is other people's project data, so neither may be vendored into this AGPL-3.0-or-later
 //! repository. `corpus.rs` covers those files where they exist locally.
 
 use openbim_bcf::{BcfError, BcfVersion, Limits, Tolerance};

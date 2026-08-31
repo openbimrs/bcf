@@ -690,6 +690,6 @@
     "bcf-api": "https://github.com/buildingSMART/BCF-API",
     "bcf-xml": "https://github.com/buildingSMART/BCF-XML",
     "license": "CC BY-ND 4.0 (c) buildingSMART International Ltd.",
-    "note": "Not vendored: this repository is MIT and the reference corpus is not. Fetch locally; the payload directories are gitignored."
+    "note": "Not vendored: this repository is AGPL-3.0-or-later and the reference corpus is not. Fetch locally; the payload directories are gitignored."
   }
 }
