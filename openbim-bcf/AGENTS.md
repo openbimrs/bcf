@@ -12,7 +12,8 @@ Follow `../AGENTS.md`. This file covers only what is specific to the crate.
 | `archive` | ZIP access, `Limits`, entry classification, `BcfArchive` |
 | `diagnostic` | `Tolerance` variants and their `Display` |
 | `error` | `BcfError` — failures that yield *nothing* |
-| `read` | the public entry points |
+| `read` | the public reading entry points |
+| `write` | the strict writer: `Document` model, `check` (lexical rules from the XSDs), `emit` (XML and deterministic ZIP) |
 
 ## The error/diagnostic boundary
 
@@ -52,10 +53,33 @@ Verified against the official `markup.xsd` files; each of these was a real bug:
   `Status`, `VerbalStatus`, `ReplyToComment`). A 2.x file with no comments is
   genuinely indeterminate — return `None` rather than guessing.
 
+## The writer is strict on purpose
+
+The reader tolerates because real files are invalid; the writer refuses
+because this crate's output should never be one of them. Do not port reader
+tolerance into `write`: a value the XSDs reject is a `WriteError::Invalid`,
+never silently repaired. Two rules keep round trips exact:
+
+- The reader trims text and treats blank as absent, so the writer refuses
+  blank values and surrounding whitespace rather than writing what cannot be
+  read back.
+- Output must stay byte-deterministic. Never let a timestamp, permission,
+  hash-map iteration order, or compression codec reach the archive by
+  default. Entries are *stored* unless the caller opts into
+  `Compression::Deflated` with an explicit level: deflate output varies
+  across codec versions, so it is never the default and never golden-pinned.
+
+Any format change must be re-blessed deliberately (`BCF_BLESS=1 cargo test
+--test write`) and pass `scripts/validate-written.py`.
+
 ## Testing
 
 - `tests/archive.rs` — synthesised containers, built in-memory. Fast, hermetic,
   and license-clean.
+- `tests/write.rs` — golden bytes, round trips through the reader, and one
+  refusal case per writer rule. The samples live in
+  `examples/write-samples/fixture.rs`, shared with the XSD validator, so the
+  golden bytes are exactly the bytes proven schema-valid.
 - `tests/corpus.rs` — opt-in sweeps over the official and field corpora, gated
   on `BCF_OFFICIAL_CORPUS` / `BCF_FIELD_CORPUS`. They skip cleanly when unset;
   do not delete them for CI's convenience.

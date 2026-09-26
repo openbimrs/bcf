@@ -60,7 +60,7 @@ part of this repository; see `docs/corpus-evidence.md` for what was measured.
 ## Two standards, one name
 
 - **BCF-XML** (buildingSMART S1005) — the file container. What `openbim-bcf`
-  reads.
+  reads and writes; its XSDs validate the writer's output.
 - **BCF-API** (S1006) — a REST/JSON service specification sharing the data
   model. Out of scope for this crate; the schemas are fetched for reference so
   the domain model can be kept compatible.

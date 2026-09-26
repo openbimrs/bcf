@@ -220,3 +220,50 @@ fn official_archives_never_contradict_their_declared_version() {
         conflicts.join("\n")
     );
 }
+
+/// Every viewpoint an official archive references is present and readable.
+///
+/// Like the version oracle above, this cannot be the corpus's fault: an
+/// official archive is valid by construction, so an unreadable `.bcfv` or an
+/// empty selection count across the whole corpus is this reader's defect.
+#[test]
+fn official_viewpoints_are_all_read() {
+    let Some(root) = corpus_root("BCF_OFFICIAL_CORPUS") else {
+        eprintln!("skipped: BCF_OFFICIAL_CORPUS unset or not a directory");
+        return;
+    };
+    let (mut viewpoints, mut selected) = (0usize, 0usize);
+    let mut unread = Vec::new();
+    for path in archives_under(&root) {
+        let Ok(archive) = openbim_bcf::read_path(&path) else {
+            continue;
+        };
+        for d in archive.diagnostics() {
+            if matches!(d.tolerance, Tolerance::UnreadableViewpoint { .. }) {
+                unread.push(format!("{}: {d}", path.display()));
+            }
+        }
+        for vp in archive.topics().flat_map(|t| &t.viewpoints) {
+            viewpoints += 1;
+            match &vp.visualization {
+                Some(v) => selected += v.selection.len(),
+                None => unread.push(format!("{}: {:?} not read", path.display(), vp.viewpoint)),
+            }
+        }
+    }
+    println!("official: {viewpoints} viewpoints, {selected} selected components");
+    assert!(
+        viewpoints > 0,
+        "corpus at {} has no viewpoints",
+        root.display()
+    );
+    assert!(
+        selected > 0,
+        "no selection read anywhere in the official corpus"
+    );
+    assert!(
+        unread.is_empty(),
+        "official viewpoints not read:\n{}",
+        unread.join("\n")
+    );
+}

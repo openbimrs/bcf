@@ -123,6 +123,78 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
         "    match s.rsplit_once(':') {\n        Some((_, local)) => local.to_string(),\n        None => s.into_owned(),\n    }",
         "    s.into_owned()",
     ),
+    (
+        "writer accepts a malformed GUID",
+        "openbim-bcf/src/write/emit.rs",
+        "        check::guid(value, self.version).map_err(|p| bad(at, p))?;",
+        "        let _ = check::guid(value, self.version);",
+    ),
+    (
+        "writer accepts a GUID used twice",
+        "openbim-bcf/src/write/emit.rs",
+        "        if !self.seen.insert(value.to_ascii_lowercase()) {",
+        "        if false && !self.seen.insert(value.to_ascii_lowercase()) {",
+    ),
+    (
+        "writer accepts an IfcGuid of the wrong length",
+        "openbim-bcf/src/write/check.rs",
+        "    if b.len() == 22 && b.iter().all(alphabet)",
+        "    if b.len() >= 20 && b.iter().all(alphabet)",
+    ),
+    (
+        "writer accepts a date outside xs:dateTime",
+        "openbim-bcf/src/write/check.rs",
+        "    if parse_date_time(value).is_some() {",
+        "    if parse_date_time(value).is_some() || !value.is_empty() {",
+    ),
+    (
+        "writer emits whitespace the reader would trim",
+        "openbim-bcf/src/write/check.rs",
+        "    if value.trim() != value {",
+        "    if false && value.trim() != value {",
+    ),
+    (
+        "writer ignores the supplied extensions",
+        "openbim-bcf/src/write/emit.rs",
+        "            Some(ext) if !list(ext).iter().any(|v| v == value) => Err(bad(",
+        "            Some(ext) if false && !list(ext).iter().any(|v| v == value) => Err(bad(",
+    ),
+    (
+        "writer emits a 3.0 viewpoint without the required camera",
+        "openbim-bcf/src/write/emit.rs",
+        '            None if self.version == TargetVersion::V3_0 => {\n                return Err(bad(format!("{at}.camera"), Invalid::Missing));',
+        '            None if false => {\n                return Err(bad(format!("{at}.camera"), Invalid::Missing));',
+    ),
+    (
+        "writer accepts a comment anchored to a missing viewpoint",
+        "openbim-bcf/src/write/emit.rs",
+        "            if !viewpoints.iter().any(|v| &v.guid == anchor) {",
+        "            if false && !viewpoints.iter().any(|v| &v.guid == anchor) {",
+    ),
+    (
+        "writer emits a literal CR that XML parsers normalise away",
+        "openbim-bcf/src/write/emit.rs",
+        "            '\\r' => out.push_str(\"&#xD;\"),",
+        "            '\\r' => out.push('\\r'),",
+    ),
+    (
+        "writer deflates by default, making bytes depend on the codec version",
+        "openbim-bcf/src/write/emit.rs",
+        "        Compression::Stored => (zip::CompressionMethod::Stored, None),",
+        "        Compression::Stored => (zip::CompressionMethod::Deflated, Some(6)),",
+    ),
+    (
+        "writer passes an out-of-range deflate level to the encoder",
+        "openbim-bcf/src/write/emit.rs",
+        "        Compression::Deflated { level } if (1..=9).contains(&level) => Ok(()),",
+        "        Compression::Deflated { .. } => Ok(()),",
+    ),
+    (
+        "reader drops the viewpoint selection it parsed",
+        "openbim-bcf/src/archive.rs",
+        "                Ok(v) => vp.visualization = Some(v),",
+        "                Ok(_) => {}",
+    ),
 ]
 
 

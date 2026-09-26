@@ -6,6 +6,7 @@ use crate::markup::{self, Markup};
 use crate::version::BcfVersion;
 use crate::xml;
 use openbim_core::Detected;
+use std::collections::HashMap;
 use std::io::{Read, Seek};
 
 /// Bounds applied while reading an archive.
@@ -81,7 +82,7 @@ impl BcfArchive {
         let mut diagnostics = Vec::new();
         let scan = scan_entries(&mut zip, limits, &mut diagnostics)?;
         let declared = read_declared_version(&mut zip, &scan, limits, &mut diagnostics);
-        let (markups, observed) = read_markups(&mut zip, &scan, limits, &mut diagnostics);
+        let (mut markups, observed) = read_markups(&mut zip, &scan, limits, &mut diagnostics);
 
         if markups.is_empty() {
             return Err(BcfError::NoTopics);
@@ -96,6 +97,13 @@ impl BcfArchive {
         }
 
         diagnostics.extend(dangling_references(&markups, &scan.entries));
+        read_visualizations(
+            &mut zip,
+            &scan.entries,
+            limits,
+            &mut markups,
+            &mut diagnostics,
+        );
 
         Ok(Self {
             version,
@@ -267,31 +275,97 @@ fn read_markups<R: Read + Seek>(
 /// Viewpoint and snapshot references naming an entry the archive does not
 /// contain. Reported, never dropped: the reference is what the file says.
 fn dangling_references(markups: &[Markup], entries: &[String]) -> Vec<Diagnostic> {
-    let known: std::collections::HashSet<&str> = entries.iter().map(String::as_str).collect();
+    let known: HashMap<&str, usize> = entry_index(entries);
     let mut out = Vec::new();
 
     for m in markups {
-        let dir = m.entry.rsplit_once('/').map_or("", |(d, _)| d);
         for vp in &m.viewpoints {
             for target in [vp.viewpoint.as_deref(), vp.snapshot.as_deref()]
                 .into_iter()
                 .flatten()
             {
-                let joined = if dir.is_empty() {
-                    target.to_string()
-                } else {
-                    format!("{dir}/{target}")
-                };
-                if !known.contains(joined.as_str()) && !known.contains(target) {
+                if resolve(&known, &m.entry, target).is_none() {
                     out.push(Diagnostic::in_entry(
                         m.entry.clone(),
-                        Tolerance::DanglingReference { target: joined },
+                        Tolerance::DanglingReference {
+                            target: joined(&m.entry, target),
+                        },
                     ));
                 }
             }
         }
     }
     out
+}
+
+/// Read the `.bcfv` document behind every resolvable viewpoint reference.
+///
+/// Dangling references were already reported; an unreadable document is
+/// reported here and leaves the reference without a visualization.
+fn read_visualizations<R: Read + Seek>(
+    zip: &mut zip::ZipArchive<R>,
+    entries: &[String],
+    limits: Limits,
+    markups: &mut [Markup],
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let known = entry_index(entries);
+    for m in markups.iter_mut() {
+        for vp in &mut m.viewpoints {
+            let Some(target) = vp.viewpoint.as_deref() else {
+                continue;
+            };
+            let Some((index, name)) = resolve(&known, &m.entry, target) else {
+                continue;
+            };
+            let parsed = read_entry(zip, index, limits)
+                .map_err(|e| e.to_string())
+                .and_then(|bytes| xml::parse(&bytes))
+                .and_then(|tree| markup::interpret_visualization(&tree));
+            match parsed {
+                Ok(v) => vp.visualization = Some(v),
+                Err(detail) => diagnostics.push(Diagnostic::in_entry(
+                    m.entry.clone(),
+                    Tolerance::UnreadableViewpoint {
+                        target: name.to_string(),
+                        detail,
+                    },
+                )),
+            }
+        }
+    }
+}
+
+/// Entry name to ZIP index. `entries` is in central-directory order, so the
+/// position *is* the index.
+fn entry_index(entries: &[String]) -> HashMap<&str, usize> {
+    entries
+        .iter()
+        .enumerate()
+        .map(|(i, e)| (e.as_str(), i))
+        .collect()
+}
+
+/// A reference relative to the markup's directory, as an archive entry name.
+fn joined(markup_entry: &str, target: &str) -> String {
+    match markup_entry.rsplit_once('/') {
+        Some((dir, _)) if !dir.is_empty() => format!("{dir}/{target}"),
+        _ => target.to_string(),
+    }
+}
+
+/// Find a referenced entry: relative to the markup first, then as an
+/// archive-root path, which some writers emit.
+fn resolve<'a>(
+    known: &HashMap<&'a str, usize>,
+    markup_entry: &str,
+    target: &str,
+) -> Option<(usize, &'a str)> {
+    let relative = joined(markup_entry, target);
+    known
+        .get_key_value(relative.as_str())
+        .or_else(|| known.get_key_value(target))
+        .map(|(name, index)| (*index, *name))
 }
 
 fn read_entry<R: Read + Seek>(

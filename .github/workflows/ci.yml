@@ -18,6 +18,8 @@ jobs:
         uses: dtolnay/rust-toolchain@bc540ba06a4ccee415bb241490e0b25ee8e7d315 # 1.85.0
         with:
           components: rustfmt, clippy
+      - name: Install lxml for XSD validation of written archives
+        run: sudo apt-get update && sudo apt-get install -y python3-lxml
       - name: Fetch official BCF references
         # CC BY-ND, so fetched rather than vendored. Non-fatal: the corpus
         # tests skip cleanly when absent, and an upstream outage must not be

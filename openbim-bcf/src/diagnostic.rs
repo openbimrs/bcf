@@ -53,6 +53,15 @@ pub enum Tolerance {
         /// The referenced entry name, verbatim.
         target: String,
     },
+    /// A `.bcfv` document named by markup exists but could not be read; the
+    /// viewpoint reference is kept without its
+    /// [`Visualization`][crate::Visualization].
+    UnreadableViewpoint {
+        /// The archive entry of the `.bcfv` document.
+        target: String,
+        /// What went wrong, as text.
+        detail: String,
+    },
     /// An archive entry uses Windows path separators.
     ///
     /// Tolerated because some writers emit them and every reader in the field
@@ -128,6 +137,9 @@ impl fmt::Display for Tolerance {
             Tolerance::TopicWithoutTitle => f.write_str("Topic has no Title"),
             Tolerance::DanglingReference { target } => {
                 write!(f, "referenced entry {target:?} is not in the archive")
+            }
+            Tolerance::UnreadableViewpoint { target, detail } => {
+                write!(f, "viewpoint {target:?} could not be read: {detail}")
             }
             Tolerance::BackslashSeparator { name } => {
                 write!(f, "entry {name:?} uses backslash separators")
