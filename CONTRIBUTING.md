@@ -55,6 +55,25 @@ let `Detected::Inferred` or a declared version stand — do not guess.
 Use focused commits with imperative subjects. Cross-repository changes publish
 this crate first and update the `openbimrs/openbim` submodule pin last.
 
+## Releasing
+
+Releases are published by `.github/workflows/release.yml` through crates.io
+trusted publishing; nobody publishes from a laptop and there is no token
+secret.
+
+1. Bump `version` in `openbim-bcf/Cargo.toml` and run `cargo update -p
+   openbim-bcf`.
+2. Move the `Unreleased` notes in `docs/CHANGELOG.md` under a dated
+   `## [<version>]` section.
+3. Commit on `main`, then push an annotated tag `v<version>` on that commit.
+
+The workflow refuses a tag that is not on `main`, does not match the
+`Cargo.toml` version, or has no changelog section; runs the full gate and the
+mutation probes on the tagged commit; publishes from the `release`
+environment; and creates the GitHub release from the changelog section.
+Rehearse with *Actions → Release → Run workflow* and a tag name: everything
+but publishing runs.
+
 ## Licensing contributions
 
 Unless an explicitly signed agreement says otherwise, every contribution
