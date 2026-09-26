@@ -56,6 +56,7 @@ jobs:
         # The same pin as ci.yml, so the release gate is the CI gate.
         uses: dtolnay/rust-toolchain@bc540ba06a4ccee415bb241490e0b25ee8e7d315 # 1.85.0
         with:
+          toolchain: 1.85.0
           components: rustfmt, clippy
       - name: Require the tag to name the crate's version
         id: plan
@@ -96,6 +97,8 @@ jobs:
           ref: ${{ env.TAG }}
       - name: Install Rust 1.85
         uses: dtolnay/rust-toolchain@bc540ba06a4ccee415bb241490e0b25ee8e7d315 # 1.85.0
+        with:
+          toolchain: 1.85.0
       - name: Check whether this version is already live
         # Re-running a partly failed release finishes it instead of failing
         # on what already succeeded.
