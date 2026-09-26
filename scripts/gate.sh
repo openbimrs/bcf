@@ -28,9 +28,11 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --no-deps
 
 # The reference corpus is fetched, not vendored. Verify it when present, and
-# prove it stayed out of Git either way.
+# prove it stayed out of Git either way. With the official XSDs at hand, also
+# prove every archive the writer produces is schema-valid.
 if [[ -f references/SOURCE-MANIFEST.json && -d references/schemas ]]; then
   ./scripts/fetch-official-references.py --verify
+  ./scripts/validate-written.py
 fi
 ./scripts/check-references-untracked.sh
 

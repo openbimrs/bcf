@@ -59,13 +59,29 @@
 //! and whether comments nest a back-reference `Topic` element, and guessing
 //! wrong yields a *different* document rather than an error.
 //!
+//! # Writing is strict
+//!
+//! The [`write`](mod@write) module is the reader's opposite: it refuses every value the
+//! official schemas reject, and produces byte-identical archives for identical
+//! input. It targets BCF 2.1 and 3.0. See its module documentation for what is
+//! written and what is refused.
+//!
 //! # Status
 //!
-//! Implemented: archive scanning, version detection, and tolerant markup
-//! reading (topics, comments, viewpoint references, header files, labels).
-//! Not implemented: viewpoint (`.bcfv`) geometry, snapshots as decoded images,
-//! project extensions, and **writing**. Read and write support are tracked
-//! separately and must never be inferred from one another.
+//! Reading, implemented: archive scanning, version detection, tolerant markup
+//! reading (topics, comments, viewpoint references, header files, labels), and
+//! each viewpoint's component selection. Not implemented: viewpoint camera,
+//! visibility, colouring, and clipping geometry, snapshots as decoded images,
+//! and project extensions.
+//!
+//! Writing, implemented for 2.1 and 3.0: topics, comments, viewpoints with a
+//! component selection and camera, and 3.0 `extensions.xml`; validated against
+//! the official XSDs by `scripts/validate-written.py`. Not implemented: header
+//! files, snapshots, visibility, colouring, document references,
+//! `project.bcfp`, and writing 2.0.
+//!
+//! Read and write support are tracked separately and must never be inferred
+//! from one another.
 //!
 //! [measure]: https://github.com/openbimrs/bcf/blob/main/scripts/measure-corpus.py
 
@@ -78,12 +94,13 @@ mod error;
 mod markup;
 mod read;
 mod version;
+pub mod write;
 mod xml;
 
 pub use archive::{BcfArchive, Limits};
 pub use diagnostic::{Diagnostic, Tolerance};
 pub use error::BcfError;
-pub use markup::{Comment, HeaderFile, Markup, Topic, ViewPointRef};
+pub use markup::{Comment, Component, HeaderFile, Markup, Topic, ViewPointRef, Visualization};
 pub use read::{
     read_path, read_path_with, read_reader, read_reader_with, read_slice, read_slice_with,
 };

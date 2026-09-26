@@ -7,7 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `openbim_bcf::write`: a strict, deterministic BCF-XML writer for 2.1 and 3.0
+  (#1). `Document` → `to_vec`, `to_writer`, or `to_path`. Writes topics
+  (GUID, title, description, type, status, priority, labels, creation author
+  and date), comments, and viewpoints with a component selection and an
+  optional camera; for 3.0 also `extensions.xml`, supplied or derived from the
+  values in use.
+- The writer refuses, before writing anything, every value the official
+  schemas reject, reporting it as `WriteError::Invalid { at, problem }` with a
+  path such as `topics[0].comments[1].date`.
+- Deterministic output: fixed entry and element order, a 1980-01-01 timestamp
+  and `0644` permissions on every entry. Entries are stored by default, which
+  keeps bytes identical across dependency upgrades; pinned by golden files in
+  `openbim-bcf/tests/golden/`.
+- `write::Options` / `write::Compression` with `to_vec_with`,
+  `to_writer_with`, and `to_path_with`: opt into deflate at an explicit level
+  `1..=9`, reproducible for a given dependency tree.
+- The reader resolves each viewpoint reference and reads the `.bcfv`
+  document's GUID and component selection into `ViewPointRef::visualization`
+  (`Visualization`, `Component`). All 65 viewpoints in the official corpus
+  read.
+- `Tolerance::UnreadableViewpoint` for a referenced `.bcfv` that exists but
+  cannot be read.
+- `scripts/validate-written.py`, run by the gate when the schemas are fetched,
+  validates the writer's output against the official XSDs.
+- `examples/write-samples`, and 12 mutation probes covering the writer and
+  viewpoint reading (29 in total, all caught).
+
 ### Changed
+
+- **Breaking:** `ViewPointRef` gained a public `visualization` field, so code
+  constructing it with a struct literal must set it.
 
 - Relicensed repository-authored work from MIT to `AGPL-3.0-or-later`; historical releases remain under their published MIT terms, and third-party material retains its own terms.
 

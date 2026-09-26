@@ -7,9 +7,9 @@ license = "AGPL-3.0-or-later"
 authors = ["OpenBIM.rs contributors"]
 repository = "https://github.com/openbimrs/bcf"
 readme = "../README.md"
-description = "Tolerant pure-Rust reader for BCF-XML (BIM Collaboration Format) issue archives."
+description = "Tolerant pure-Rust reader and strict, deterministic writer for BCF-XML (BIM Collaboration Format) issue archives."
 keywords = ["bim", "openbim", "bcf", "ifc", "aec"]
-categories = ["parser-implementations", "data-structures"]
+categories = ["parser-implementations", "encoding", "data-structures"]
 
 [dependencies]
 openbim-core = "0.1"

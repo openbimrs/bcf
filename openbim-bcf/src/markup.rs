@@ -39,8 +39,9 @@ pub struct HeaderFile {
 /// A viewpoint attached to a topic: the camera and visibility state, plus its
 /// snapshot.
 ///
-/// This is the *reference*, not the parsed `.bcfv` contents. Viewpoint geometry
-/// is not implemented; see the crate-level status section.
+/// The markup side of the reference, plus the component selection of the
+/// `.bcfv` document it names. Camera, visibility, and colouring geometry are
+/// not read; see the crate-level status section.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ViewPointRef {
     /// The viewpoint's GUID.
@@ -51,6 +52,50 @@ pub struct ViewPointRef {
     pub snapshot: Option<String>,
     /// Sort order among a topic's viewpoints, when given (BCF 3.0).
     pub index: Option<i32>,
+    /// What the referenced `.bcfv` document says, when it could be read.
+    ///
+    /// `None` when the markup names no `.bcfv`, names one the archive lacks
+    /// ([`Tolerance::DanglingReference`]), or names one that cannot be parsed
+    /// ([`Tolerance::UnreadableViewpoint`]).
+    pub visualization: Option<Visualization>,
+}
+
+/// The parts of a `.bcfv` viewpoint document this crate reads.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct Visualization {
+    /// `VisualizationInfo/@Guid`, verbatim.
+    pub guid: Option<String>,
+    /// Components the viewpoint highlights, in document order.
+    ///
+    /// 2.1 and 3.0 list them under `Components/Selection`; 2.0 flags them with
+    /// `Selected="true"` directly under `Components`. Both are read.
+    pub selection: Vec<Component>,
+}
+
+/// One model element referenced by a viewpoint.
+///
+/// The schema makes every member optional; a component usually carries an
+/// `IfcGuid`, and sometimes only a tool-specific `AuthoringToolId`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct Component {
+    /// The IFC `GlobalId`: 22 characters of IFC base64.
+    pub ifc_guid: Option<String>,
+    /// Name of the system the component originates from.
+    pub originating_system: Option<String>,
+    /// The authoring tool's own identifier for the component.
+    pub authoring_tool_id: Option<String>,
+}
+
+impl Component {
+    /// A component identified only by its IFC `GlobalId`.
+    #[must_use]
+    pub fn ifc(ifc_guid: impl Into<String>) -> Self {
+        Self {
+            ifc_guid: Some(ifc_guid.into()),
+            ..Self::default()
+        }
+    }
 }
 
 /// One comment on a topic.
@@ -367,6 +412,56 @@ fn read_viewpoint(node: &Node) -> ViewPointRef {
         viewpoint: owned(node.child_text("Viewpoint")),
         snapshot: owned(node.child_text("Snapshot")),
         index: node.child_text("Index").and_then(|i| i.parse().ok()),
+        // Filled in by the archive once the `.bcfv` entry has been resolved.
+        visualization: None,
+    }
+}
+
+/// Interpret a `.bcfv` tree.
+///
+/// # Errors
+///
+/// Returns a description when the root is not `VisualizationInfo`: such a
+/// document is not a viewpoint, and reading a selection out of it would be a
+/// guess.
+pub(crate) fn interpret_visualization(root: &Node) -> Result<Visualization, String> {
+    if root.name != "VisualizationInfo" {
+        return Err(format!(
+            "root element is <{}>, not <VisualizationInfo>",
+            root.name
+        ));
+    }
+    let components = root.child("Components");
+    // 2.1/3.0: Components/Selection/Component.
+    // 2.0:     Components/Component with Selected="true"; the others are
+    //          merely visible or coloured, which is not a selection.
+    let selection = components
+        .into_iter()
+        .flat_map(|c| c.children_named("Selection"))
+        .flat_map(|s| s.children_named("Component"))
+        .chain(
+            components
+                .into_iter()
+                .flat_map(|c| c.children_named("Component"))
+                .filter(|c| c.attr("Selected").and_then(parse_bool) == Some(true)),
+        )
+        .map(read_component)
+        .collect();
+    Ok(Visualization {
+        guid: owned(root.attr("Guid").map(str::trim).filter(|g| !g.is_empty())),
+        selection,
+    })
+}
+
+fn read_component(node: &Node) -> Component {
+    Component {
+        ifc_guid: owned(
+            node.attr("IfcGuid")
+                .map(str::trim)
+                .filter(|g| !g.is_empty()),
+        ),
+        originating_system: owned(node.child_text("OriginatingSystem")),
+        authoring_tool_id: owned(node.child_text("AuthoringToolId")),
     }
 }
 
@@ -664,6 +759,44 @@ mod tests {
         assert_eq!(m.topic.labels, ["L1", "L2"]);
         assert_eq!(m.topic.related_topics, ["r1", "r2"]);
         assert_eq!(m.topic.reference_links, ["http://x/1"]);
+    }
+
+    #[test]
+    fn reads_a_2_1_and_3_0_component_selection() {
+        let v = interpret_visualization(&tree(
+            r#"<VisualizationInfo Guid="v"><Components><Selection><Component IfcGuid="0fXw$sQh19ixbI4tZgfkXu"><OriginatingSystem>Revit</OriginatingSystem><AuthoringToolId>42</AuthoringToolId></Component><Component IfcGuid="1Qj3z6Wtb5WwCLdW5ctWxe"/></Selection><Visibility DefaultVisibility="true"><Exceptions><Component IfcGuid="3cUkl32yn9qRSPvBJVyWYp"/></Exceptions></Visibility></Components></VisualizationInfo>"#,
+        ))
+        .unwrap();
+        assert_eq!(v.guid.as_deref(), Some("v"));
+        assert_eq!(
+            v.selection.len(),
+            2,
+            "visibility exceptions are not a selection"
+        );
+        assert_eq!(
+            v.selection[0],
+            Component {
+                ifc_guid: Some("0fXw$sQh19ixbI4tZgfkXu".into()),
+                originating_system: Some("Revit".into()),
+                authoring_tool_id: Some("42".into()),
+            }
+        );
+        assert_eq!(v.selection[1], Component::ifc("1Qj3z6Wtb5WwCLdW5ctWxe"));
+    }
+
+    /// 2.0 has no `Selection` wrapper: selected components are flagged.
+    #[test]
+    fn reads_a_2_0_selection_from_the_selected_flag() {
+        let v = interpret_visualization(&tree(
+            r#"<VisualizationInfo><Components><Component IfcGuid="0fXw$sQh19ixbI4tZgfkXu" Selected="true"/><Component IfcGuid="1Qj3z6Wtb5WwCLdW5ctWxe" Visible="false"/><Component IfcGuid="3cUkl32yn9qRSPvBJVyWYp" Selected="false"/></Components></VisualizationInfo>"#,
+        ))
+        .unwrap();
+        assert_eq!(v.selection, [Component::ifc("0fXw$sQh19ixbI4tZgfkXu")]);
+    }
+
+    #[test]
+    fn a_non_viewpoint_document_is_refused() {
+        assert!(interpret_visualization(&tree("<Markup/>")).is_err());
     }
 
     #[test]

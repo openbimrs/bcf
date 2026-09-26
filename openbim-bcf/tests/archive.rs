@@ -5,7 +5,7 @@
 //! is other people's project data, so neither may be vendored into this AGPL-3.0-or-later
 //! repository. `corpus.rs` covers those files where they exist locally.
 
-use openbim_bcf::{BcfError, BcfVersion, Limits, Tolerance};
+use openbim_bcf::{BcfError, BcfVersion, Component, Limits, Tolerance};
 use openbim_core::Detected;
 use std::io::{Cursor, Write};
 
@@ -285,4 +285,91 @@ fn the_2_0_shape_is_read_with_status_from_child_elements() {
     assert_eq!(topic.status(), Some("Open"));
     assert_eq!(topic.topic.topic_type.as_deref(), Some("Error"));
     assert_eq!(topic.comments[0].comment.as_deref(), Some("back-reference"));
+}
+
+#[test]
+fn a_viewpoint_selection_is_read_from_the_referenced_bcfv() {
+    let visinfo = br#"<?xml version="1.0"?><VisualizationInfo Guid="v1"><Components><Selection><Component IfcGuid="0fXw$sQh19ixbI4tZgfkXu"><OriginatingSystem>Revit</OriginatingSystem></Component></Selection><Visibility DefaultVisibility="true"/></Components></VisualizationInfo>"#;
+    let bytes = zip_of(&[
+        ("bcf.version", &version_entry("2.1")),
+        ("t1/markup.bcf", MARKUP_2_1.as_bytes()),
+        ("t1/viewpoint.bcfv", visinfo),
+        ("t1/snapshot.png", b"\x89PNG\r\n\x1a\n"),
+    ]);
+    let archive = openbim_bcf::read_slice(&bytes).unwrap();
+    assert!(
+        archive.diagnostics().is_empty(),
+        "{:?}",
+        archive.diagnostics()
+    );
+
+    let vis = archive.topics().next().unwrap().viewpoints[0]
+        .visualization
+        .clone()
+        .expect("the .bcfv was read");
+    assert_eq!(vis.guid.as_deref(), Some("v1"));
+    assert_eq!(
+        vis.selection,
+        [Component {
+            ifc_guid: Some("0fXw$sQh19ixbI4tZgfkXu".into()),
+            originating_system: Some("Revit".into()),
+            authoring_tool_id: None,
+        }]
+    );
+}
+
+/// A broken `.bcfv` costs the viewpoint its visualization, not the topic —
+/// and says so.
+#[test]
+fn an_unreadable_viewpoint_is_reported_and_the_reference_kept() {
+    for (label, payload) in [
+        ("not xml", &b"\x00\x01 garbage"[..]),
+        ("not a viewpoint", &b"<Markup/>"[..]),
+    ] {
+        let bytes = zip_of(&[
+            ("bcf.version", &version_entry("2.1")),
+            ("t1/markup.bcf", MARKUP_2_1.as_bytes()),
+            ("t1/viewpoint.bcfv", payload),
+            ("t1/snapshot.png", b"\x89PNG\r\n\x1a\n"),
+        ]);
+        let archive = openbim_bcf::read_slice(&bytes).unwrap();
+        let topic = archive.topics().next().unwrap();
+        assert_eq!(topic.viewpoints.len(), 1, "{label}");
+        assert_eq!(topic.viewpoints[0].visualization, None, "{label}");
+        let d = archive.diagnostics();
+        assert_eq!(d.len(), 1, "{label}: {d:?}");
+        assert_eq!(d[0].entry.as_deref(), Some("t1/markup.bcf"), "{label}");
+        match &d[0].tolerance {
+            Tolerance::UnreadableViewpoint { target, .. } => {
+                assert_eq!(target, "t1/viewpoint.bcfv", "{label}");
+            }
+            other => panic!("{label}: expected UnreadableViewpoint, got {other:?}"),
+        }
+    }
+}
+
+/// A `.bcfv` larger than the per-entry limit is refused like any other
+/// entry, not buffered: viewpoint reading goes through the same bounded path.
+#[test]
+fn an_oversized_viewpoint_is_reported_not_buffered() {
+    let huge = vec![b' '; 128 * 1024];
+    let bytes = zip_of(&[
+        ("bcf.version", &version_entry("2.1")),
+        ("t1/markup.bcf", MARKUP_2_1.as_bytes()),
+        ("t1/viewpoint.bcfv", &huge),
+        ("t1/snapshot.png", b"\x89PNG\r\n\x1a\n"),
+    ]);
+    let limits = Limits {
+        max_entry_uncompressed: 64 * 1024,
+        ..Limits::default()
+    };
+    let archive = openbim_bcf::read_slice_with(&bytes, limits).unwrap();
+    assert!(
+        archive.diagnostics().iter().any(|d| matches!(
+            &d.tolerance,
+            Tolerance::UnreadableViewpoint { detail, .. } if detail.contains("entry size")
+        )),
+        "{:?}",
+        archive.diagnostics()
+    );
 }

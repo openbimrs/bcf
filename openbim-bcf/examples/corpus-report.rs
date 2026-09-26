@@ -47,6 +47,7 @@ fn label(t: &Tolerance) -> &'static str {
         Tolerance::CommentWithoutGuid => "CommentWithoutGuid",
         Tolerance::TopicWithoutTitle => "TopicWithoutTitle",
         Tolerance::DanglingReference { .. } => "DanglingReference",
+        Tolerance::UnreadableViewpoint { .. } => "UnreadableViewpoint",
         Tolerance::BackslashSeparator { .. } => "BackslashSeparator",
         Tolerance::UnparseableDateTime { .. } => "UnparseableDateTime",
         _ => "Other",
@@ -61,6 +62,7 @@ fn main() {
     }
 
     let (mut read, mut loose, mut failed, mut topics, mut comments) = (0, 0, 0, 0usize, 0usize);
+    let (mut viewpoints, mut visualizations, mut selected) = (0usize, 0usize, 0usize);
     let mut versions: BTreeMap<String, usize> = BTreeMap::new();
     let mut tolerances: BTreeMap<&str, usize> = BTreeMap::new();
     let mut statuses: BTreeMap<String, usize> = BTreeMap::new();
@@ -72,6 +74,13 @@ fn main() {
                     read += 1;
                     topics += a.topic_count();
                     comments += a.topics().map(|t| t.comments.len()).sum::<usize>();
+                    for vp in a.topics().flat_map(|t| &t.viewpoints) {
+                        viewpoints += 1;
+                        if let Some(v) = &vp.visualization {
+                            visualizations += 1;
+                            selected += v.selection.len();
+                        }
+                    }
                     let v = match a.version() {
                         Detected::Declared(v) => format!("Declared({})", v.version_id()),
                         Detected::Inferred(v) => format!("Inferred({})", v.version_id()),
@@ -105,6 +114,7 @@ fn main() {
     println!("failed        : {failed}");
     println!("topics        : {topics}");
     println!("comments      : {comments}");
+    println!("viewpoints    : {viewpoints} ({visualizations} .bcfv read, {selected} selected components)");
     println!("\n-- version detection --");
     for (k, v) in &versions {
         println!("{k:28} {v}");
