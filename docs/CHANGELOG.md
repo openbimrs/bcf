@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-26
+
+The first release with an implementation on crates.io: `0.2.0` was prepared
+but never published, so from crates.io this follows the `0.1.0` name
+reservation directly and includes everything listed under `0.2.0` below.
+
 ### Added
 
 - `openbim_bcf::write`: a strict, deterministic BCF-XML writer for 2.1 and 3.0
@@ -43,10 +49,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Relicensed repository-authored work from MIT to `AGPL-3.0-or-later`; historical releases remain under their published MIT terms, and third-party material retains its own terms.
 
-## [0.2.0] - 2026-08-26
+## [0.2.0] - 2026-08-26 [NOT PUBLISHED]
 
-First release with an implementation. `0.1.0` was a name reservation containing
-a `BcfVersion` enum and nothing else.
+Prepared and dated here, but never tagged or published to crates.io; its
+contents first shipped in `0.3.0`. First version with an implementation.
+`0.1.0` was a name reservation containing a `BcfVersion` enum and nothing
+else.
 
 ### Added
 
@@ -92,5 +100,6 @@ a `BcfVersion` enum and nothing else.
   placement was consulted, losing 9 comments across the official corpus.
 - `Topic/Labels/Label` (3.0) is read in addition to repeated `Labels` (2.x).
 
-[Unreleased]: https://github.com/openbimrs/bcf/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/openbimrs/bcf/releases/tag/v0.2.0
+[Unreleased]: https://github.com/openbimrs/bcf/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/openbimrs/bcf/releases/tag/v0.3.0
+[0.2.0]: https://github.com/openbimrs/bcf/tree/22a1b10
