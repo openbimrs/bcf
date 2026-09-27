@@ -69,7 +69,7 @@ secret.
 
 The workflow refuses a tag that is not on `main`, does not match the
 `Cargo.toml` version, or has no changelog section; runs the full gate and the
-mutation probes on the tagged commit; publishes from the `release`
+mutation probes on the tagged commit; publishes from the `crates.io`
 environment; and creates the GitHub release from the changelog section.
 Rehearse with *Actions → Release → Run workflow* and a tag name: everything
 but publishing runs.
