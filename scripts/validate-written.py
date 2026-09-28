@@ -90,53 +90,84 @@ def validate_archive(path: Path) -> list[str]:
     return problems
 
 
-# (label, version, entry predicate, find, replace) — each must be rejected.
+# (label, sample archive stem, entry predicate, find, replace) — each must be
+# rejected. Every one guards a schema rule the writer relies on.
 NEGATIVE_CONTROLS = [
     (
         "3.0 viewpoint without a camera",
-        "3.0",
+        "sample-3.0",
         lambda e: e.endswith(".bcfv"),
         (b"<PerspectiveCamera>", b"</PerspectiveCamera>"),
         None,
     ),
     (
         "3.0 uppercase topic GUID",
-        "3.0",
+        "sample-3.0",
         lambda e: e.endswith("/markup.bcf"),
         b'Topic Guid="3f2504e0',
         b'Topic Guid="3F2504E0',
     ),
     (
         "2.1 comment elements out of sequence order",
-        "2.1",
+        "sample-2.1",
         lambda e: e.endswith("/markup.bcf"),
         b"<Date>2026-09-26T10:00:00Z</Date>\n    <Author>checker@example.com</Author>",
         b"<Author>checker@example.com</Author>\n    <Date>2026-09-26T10:00:00Z</Date>",
     ),
     (
         "2.1 IfcGuid of 21 characters",
-        "2.1",
+        "sample-2.1",
         lambda e: e.endswith(".bcfv"),
         b'IfcGuid="0fXw$sQh19ixbI4tZgfkXu"',
         b'IfcGuid="0fXw$sQh19ixbI4tZgfkX"',
     ),
     (
         "2.1 malformed CreationDate",
-        "2.1",
+        "sample-2.1",
         lambda e: e.endswith("/markup.bcf"),
         b"<CreationDate>2026-09-26T10:00:00Z</CreationDate>",
         b"<CreationDate>2026-09-26 10:00</CreationDate>",
+    ),
+    (
+        "2.1 lowercase Color",
+        "sample-2.1-styled",
+        lambda e: e.endswith(".bcfv"),
+        b'Color="800000FF"',
+        b'Color="800000ff"',
+    ),
+    (
+        "3.0 Color without its Components wrapper",
+        "sample-3.0-styled",
+        lambda e: e.endswith(".bcfv"),
+        (b'<Color Color="FF0000">\n        <Components>', b"</Components>\n      </Color>"),
+        b'<Color Color="FF0000"><Component IfcGuid="0fXw$sQh19ixbI4tZgfkXu"/></Color>',
+    ),
+    (
+        "2.1 Components without the required Visibility",
+        "sample-2.1-styled",
+        lambda e: e.endswith(".bcfv"),
+        b'<Visibility DefaultVisibility="true"/>',
+        b"",
+    ),
+    (
+        "2.1 empty Exceptions",
+        "sample-2.1-styled",
+        lambda e: e.endswith(".bcfv"),
+        b'<Visibility DefaultVisibility="false"/>',
+        b'<Visibility DefaultVisibility="false"><Exceptions/></Visibility>',
     ),
 ]
 
 
 def mutate(data: bytes, find, replace) -> bytes | None:
-    if replace is None:
+    if isinstance(find, tuple):
+        # Replace the span from the first `start` through the next `end`.
         start, end = find
-        i, j = data.find(start), data.find(end)
+        i = data.find(start)
+        j = data.find(end, i) if i >= 0 else -1
         if i < 0 or j < 0:
             return None
-        return data[:i] + data[j + len(end):]
+        return data[:i] + (replace or b"") + data[j + len(end):]
     if find not in data:
         return None
     return data.replace(find, replace, 1)
@@ -144,9 +175,13 @@ def mutate(data: bytes, find, replace) -> bytes | None:
 
 def run_negative_controls(archives: dict[str, Path]) -> list[str]:
     failures = []
-    for label, version, pick, find, replace in NEGATIVE_CONTROLS:
+    for label, stem, pick, find, replace in NEGATIVE_CONTROLS:
         rejected = anchored = False
-        with zipfile.ZipFile(archives[version]) as z:
+        if stem not in archives:
+            failures.append(f"negative control targets missing sample {stem}: {label}")
+            continue
+        with zipfile.ZipFile(archives[stem]) as z:
+            version = declared_version(z)
             for entry in filter(pick, z.namelist()):
                 mutated = mutate(z.read(entry), find, replace)
                 if mutated is None:
@@ -191,7 +226,7 @@ def main() -> int:
             if version not in by_version:
                 problems.append(f"no sample archive targets BCF {version}")
         if not problems:
-            problems.extend(run_negative_controls(by_version))
+            problems.extend(run_negative_controls({p.stem: p for p in archives}))
 
     if problems:
         print("\nFAIL:")

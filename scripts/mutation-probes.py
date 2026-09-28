@@ -195,6 +195,36 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
         "                Ok(v) => vp.visualization = Some(v),",
         "                Ok(_) => {}",
     ),
+    (
+        "writer accepts a colour outside the version's pattern",
+        "openbim-bcf/src/write/emit.rs",
+        "            check::color(&coloring.color, self.version)\n                .map_err(|p| bad(format!(\"{at}.color\"), p))?;",
+        "            let _ = check::color(&coloring.color, self.version);",
+    ),
+    (
+        "writer accepts a colouring without components",
+        "openbim-bcf/src/write/emit.rs",
+        "            if coloring.components.is_empty() {",
+        "            if false && coloring.components.is_empty() {",
+    ),
+    (
+        "writer accepts a visibility exception identifying nothing",
+        "openbim-bcf/src/write/emit.rs",
+        "                component(&format!(\"{at}.visibility.exceptions[{i}]\"), c)?;",
+        "                let _ = component(&format!(\"{at}.visibility.exceptions[{i}]\"), c);",
+    ),
+    (
+        "writer accepts a clipping plane with a zero direction",
+        "openbim-bcf/src/write/emit.rs",
+        "            vector(&format!(\"{at}.direction\"), plane.direction, true)?;",
+        "            vector(&format!(\"{at}.direction\"), plane.direction, false)?;",
+    ),
+    (
+        "writer drops 3.0's Color/Components wrapper",
+        "openbim-bcf/src/write/emit.rs",
+        "                if v3 {\n                    x.open(\"Components\", &[]);",
+        "                if false {\n                    x.open(\"Components\", &[]);",
+    ),
 ]
 
 

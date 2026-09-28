@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Viewpoint visibility, colouring, and clipping planes in the writer (#7):
+  `write::Viewpoint` gained `visibility: Option<Visibility>` (default
+  visibility plus exceptions), `coloring: Vec<Coloring>` (6- or 8-digit hex
+  colour and its components), and `clipping_planes: Vec<ClippingPlane>`.
+  Each version gets its own schema shape: 3.0 wraps coloured components in
+  `Color/Components`, 2.1 lists them under `Color`.
+- Refusals `Invalid::Color` (not 6 or 8 hex digits; uppercase only in 2.1, as
+  its schema says) and `Invalid::NoComponents` (a colouring without
+  components). Components in exceptions and colourings need an identifier,
+  as in a selection; a clipping plane needs a non-zero direction.
+- Two XSD-validated golden samples (`sample-2.1-styled`, `sample-3.0-styled`),
+  four new negative controls in `scripts/validate-written.py`, and five
+  mutation probes (34 in total, all caught).
+
+### Changed
+
+- **Breaking:** `write::Viewpoint` gained three public fields, so struct
+  literals must set them or end in `..Viewpoint::default()`. With
+  `visibility: None` and no colouring, output is byte-identical to 0.3.0.
+
 ## [0.3.0] - 2026-09-26
 
 The first release with an implementation on crates.io: `0.2.0` was prepared

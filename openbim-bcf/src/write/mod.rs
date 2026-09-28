@@ -30,6 +30,7 @@
 //!             guid: "7e1d2c3b-4a59-4687-9a1b-2c3d4e5f6a7b".into(),
 //!             selection: vec![Component::ifc("0fXw$sQh19ixbI4tZgfkXu")],
 //!             camera: None,
+//!             ..Viewpoint::default()
 //!         }],
 //!         ..Topic::default()
 //!     }],
@@ -67,14 +68,18 @@
 //! - A type, status, priority, or label missing from supplied
 //!   [`Extensions`].
 //! - A comment anchored to a viewpoint the topic does not have.
+//! - A colour that is not 6 or 8 hex digits (uppercase only in 2.1, as its
+//!   schema says), a colouring without components, and a clipping plane with
+//!   a zero direction.
 //!
 //! # Scope
 //!
 //! Topics carry GUID, title, description, type, status, priority, labels,
 //! creation author and date, comments, and viewpoints. A viewpoint carries a
-//! component selection and optionally a camera. Header files, snapshots,
-//! visibility, colouring, clipping planes, document references, and
-//! `project.bcfp` are not written.
+//! component selection, visibility with exceptions, colouring, clipping
+//! planes, and optionally a camera. Header files, snapshots, lines, bitmaps,
+//! view setup hints, document references, and `project.bcfp` are not
+//! written.
 
 mod check;
 mod emit;
@@ -200,6 +205,45 @@ pub struct Viewpoint {
     pub selection: Vec<Component>,
     /// The camera. Optional in 2.1, required in 3.0.
     pub camera: Option<Camera>,
+    /// Which components are shown. `None` writes `DefaultVisibility="true"`
+    /// with no exceptions: everything visible.
+    pub visibility: Option<Visibility>,
+    /// Components drawn in a given colour, in order.
+    pub coloring: Vec<Coloring>,
+    /// Planes cutting the view, in order.
+    pub clipping_planes: Vec<ClippingPlane>,
+}
+
+/// Component visibility in a [`Viewpoint`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Visibility {
+    /// Whether components are visible unless listed in `exceptions`.
+    pub default_visibility: bool,
+    /// Components whose visibility is the opposite of `default_visibility`:
+    /// with `false`, the only visible ones. Each needs an identifier, as in
+    /// a selection.
+    pub exceptions: Vec<Component>,
+}
+
+/// Components drawn in one colour.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Coloring {
+    /// The colour as hex digits: 6 (`RRGGBB`) or 8 (`AARRGGBB`, alpha
+    /// first). BCF 2.1's schema accepts uppercase only; 3.0 either case.
+    /// Written verbatim, never normalised.
+    pub color: String,
+    /// The components to colour; at least one, each with an identifier.
+    pub components: Vec<Component>,
+}
+
+/// A plane cutting a [`Viewpoint`]: everything on the side the direction
+/// points to is clipped away.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct ClippingPlane {
+    /// A point on the plane.
+    pub location: Vector3,
+    /// The plane normal. Must not be the zero vector.
+    pub direction: Vector3,
 }
 
 /// A viewpoint camera.
@@ -330,6 +374,13 @@ pub enum Invalid {
     },
     /// A component with neither `IfcGuid` nor `AuthoringToolId`.
     UnidentifiedComponent,
+    /// Not 6 or 8 hex digits in the target version's `Color` pattern.
+    Color {
+        /// The value as given.
+        value: String,
+    },
+    /// A colouring with no components; the schema requires at least one.
+    NoComponents,
     /// A number outside its allowed range.
     Number {
         /// The value as given.
@@ -378,6 +429,8 @@ impl fmt::Display for Invalid {
             Invalid::UnknownViewpoint { guid } => {
                 write!(f, "no viewpoint {guid:?} in this topic")
             }
+            Invalid::Color { value } => write!(f, "{value:?} is not a 6- or 8-digit hex colour"),
+            Invalid::NoComponents => f.write_str("a colouring needs at least one component"),
             Invalid::UnidentifiedComponent => {
                 f.write_str("component has neither IfcGuid nor AuthoringToolId")
             }

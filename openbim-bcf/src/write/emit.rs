@@ -8,7 +8,7 @@
 
 use super::{
     check, Camera, Comment, Compression, Document, Extensions, Invalid, Options, Projection,
-    TargetVersion, Topic, Vector3, Viewpoint, WriteError,
+    TargetVersion, Topic, Vector3, Viewpoint, Visibility, WriteError,
 };
 use crate::markup::Component;
 use std::collections::HashSet;
@@ -229,6 +229,28 @@ impl Ctx<'_> {
         self.guid(&format!("{at}.guid"), &vp.guid)?;
         for (i, c) in vp.selection.iter().enumerate() {
             component(&format!("{at}.selection[{i}]"), c)?;
+        }
+        if let Some(v) = &vp.visibility {
+            for (i, c) in v.exceptions.iter().enumerate() {
+                component(&format!("{at}.visibility.exceptions[{i}]"), c)?;
+            }
+        }
+        for (i, coloring) in vp.coloring.iter().enumerate() {
+            let at = format!("{at}.coloring[{i}]");
+            check::color(&coloring.color, self.version)
+                .map_err(|p| bad(format!("{at}.color"), p))?;
+            // 2.1 `Color` and 3.0 `Color/Components` both need a Component.
+            if coloring.components.is_empty() {
+                return Err(bad(format!("{at}.components"), Invalid::NoComponents));
+            }
+            for (j, c) in coloring.components.iter().enumerate() {
+                component(&format!("{at}.components[{j}]"), c)?;
+            }
+        }
+        for (i, plane) in vp.clipping_planes.iter().enumerate() {
+            let at = format!("{at}.clipping_planes[{i}]");
+            vector(&format!("{at}.location"), plane.location, false)?;
+            vector(&format!("{at}.direction"), plane.direction, true)?;
         }
         match &vp.camera {
             Some(camera) => self.camera(&format!("{at}.camera"), camera)?,
@@ -644,31 +666,35 @@ fn viewpoint_refs_xml(x: &mut Xml, element: &str, viewpoints: &[Viewpoint]) {
 }
 
 fn visinfo_xml(version: TargetVersion, vp: &Viewpoint) -> Vec<u8> {
+    let v3 = version == TargetVersion::V3_0;
     let mut x = Xml::new();
     x.open("VisualizationInfo", &[("Guid", &vp.guid)]);
-    if !vp.selection.is_empty() {
+    // The Components sequence is Selection?, Visibility, Coloring? in both
+    // versions (2.1 also allows a leading ViewSetupHints, not written here).
+    if !vp.selection.is_empty() || vp.visibility.is_some() || !vp.coloring.is_empty() {
         x.open("Components", &[]);
-        x.open("Selection", &[]);
-        for c in &vp.selection {
-            let attrs: Vec<(&str, &str)> =
-                c.ifc_guid.iter().map(|g| ("IfcGuid", g.as_str())).collect();
-            if c.originating_system.is_none() && c.authoring_tool_id.is_none() {
-                x.empty("Component", &attrs);
-                continue;
-            }
-            x.open("Component", &attrs);
-            if let Some(s) = &c.originating_system {
-                x.leaf("OriginatingSystem", s);
-            }
-            if let Some(id) = &c.authoring_tool_id {
-                x.leaf("AuthoringToolId", id);
-            }
-            x.close("Component");
+        if !vp.selection.is_empty() {
+            x.open("Selection", &[]);
+            components_xml(&mut x, &vp.selection);
+            x.close("Selection");
         }
-        x.close("Selection");
-        // Required in 2.1. Written in 3.0 too, and explicitly: 3.0's
-        // DefaultVisibility defaults to false, which would hide the model.
-        x.empty("Visibility", &[("DefaultVisibility", "true")]);
+        visibility_xml(&mut x, vp.visibility.as_ref());
+        if !vp.coloring.is_empty() {
+            x.open("Coloring", &[]);
+            for coloring in &vp.coloring {
+                x.open("Color", &[("Color", &coloring.color)]);
+                // 3.0 wraps the coloured components; 2.1 lists them bare.
+                if v3 {
+                    x.open("Components", &[]);
+                    components_xml(&mut x, &coloring.components);
+                    x.close("Components");
+                } else {
+                    components_xml(&mut x, &coloring.components);
+                }
+                x.close("Color");
+            }
+            x.close("Coloring");
+        }
         x.close("Components");
     }
     if let Some(c) = &vp.camera {
@@ -688,15 +714,70 @@ fn visinfo_xml(version: TargetVersion, vp: &Viewpoint) -> Vec<u8> {
                 x.number("ViewToWorldScale", view_to_world_scale);
             }
         }
-        if version == TargetVersion::V3_0 {
+        if v3 {
             if let Some(r) = c.aspect_ratio {
                 x.number("AspectRatio", r);
             }
         }
         x.close(element);
     }
+    // After the camera and (unwritten) Lines, in both versions.
+    if !vp.clipping_planes.is_empty() {
+        x.open("ClippingPlanes", &[]);
+        for plane in &vp.clipping_planes {
+            x.open("ClippingPlane", &[]);
+            x.vector("Location", plane.location);
+            x.vector("Direction", plane.direction);
+            x.close("ClippingPlane");
+        }
+        x.close("ClippingPlanes");
+    }
     x.close("VisualizationInfo");
     x.finish()
+}
+
+/// `Components/Visibility`: required in 2.1 whenever `Components` is
+/// written, and written in 3.0 too, explicitly — 3.0's `DefaultVisibility`
+/// defaults to false, so omitting it would hide the model.
+fn visibility_xml(x: &mut Xml, visibility: Option<&Visibility>) {
+    let Some(v) = visibility else {
+        x.empty("Visibility", &[("DefaultVisibility", "true")]);
+        return;
+    };
+    let default = if v.default_visibility {
+        "true"
+    } else {
+        "false"
+    };
+    // 2.1's Exceptions needs at least one Component, so an empty list is
+    // omitted rather than written empty; the meaning is the same.
+    if v.exceptions.is_empty() {
+        x.empty("Visibility", &[("DefaultVisibility", default)]);
+        return;
+    }
+    x.open("Visibility", &[("DefaultVisibility", default)]);
+    x.open("Exceptions", &[]);
+    components_xml(x, &v.exceptions);
+    x.close("Exceptions");
+    x.close("Visibility");
+}
+
+fn components_xml(x: &mut Xml, components: &[Component]) {
+    for c in components {
+        let attrs: Vec<(&str, &str)> = c.ifc_guid.iter().map(|g| ("IfcGuid", g.as_str())).collect();
+        if c.originating_system.is_none() && c.authoring_tool_id.is_none() {
+            x.empty("Component", &attrs);
+            continue;
+        }
+        x.open("Component", &attrs);
+        if let Some(s) = &c.originating_system {
+            x.leaf("OriginatingSystem", s);
+        }
+        if let Some(id) = &c.authoring_tool_id {
+            x.leaf("AuthoringToolId", id);
+        }
+        x.close("Component");
+    }
 }
 
 #[cfg(test)]

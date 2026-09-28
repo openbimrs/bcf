@@ -8,8 +8,8 @@
 mod fixture;
 
 use openbim_bcf::write::{
-    self, Camera, Comment, Compression, Document, Extensions, Invalid, Options, Projection,
-    TargetVersion, Topic, Vector3, Viewpoint, WriteError,
+    self, Camera, ClippingPlane, Coloring, Comment, Compression, Document, Extensions, Invalid,
+    Options, Projection, TargetVersion, Topic, Vector3, Viewpoint, Visibility, WriteError,
 };
 use openbim_bcf::{BcfVersion, Component, Markup};
 use openbim_core::Detected;
@@ -217,9 +217,17 @@ fn minimal(version: TargetVersion) -> Document {
                     aspect_ratio: v3.then_some(1.5),
                     ..camera()
                 }),
+                ..Viewpoint::default()
             }],
             ..Topic::default()
         }],
+    }
+}
+
+fn coloring(color: &str) -> Coloring {
+    Coloring {
+        color: color.into(),
+        components: vec![Component::ifc("0fXw$sQh19ixbI4tZgfkXu")],
     }
 }
 
@@ -461,6 +469,102 @@ fn malformed_values_are_refused_with_their_location() {
             |p| matches!(p, Invalid::UnknownViewpoint { .. }),
         ),
         (
+            "visibility exception identifying nothing",
+            TargetVersion::V3_0,
+            |d| {
+                d.topics[0].viewpoints[0].visibility = Some(Visibility {
+                    default_visibility: false,
+                    exceptions: vec![Component::default()],
+                });
+            },
+            "topics[0].viewpoints[0].visibility.exceptions[0]",
+            |p| matches!(p, Invalid::UnidentifiedComponent),
+        ),
+        (
+            "visibility exception with a malformed IfcGuid",
+            TargetVersion::V2_1,
+            |d| {
+                d.topics[0].viewpoints[0].visibility = Some(Visibility {
+                    default_visibility: true,
+                    exceptions: vec![Component::ifc("not-an-ifc-guid")],
+                });
+            },
+            "topics[0].viewpoints[0].visibility.exceptions[0].ifc_guid",
+            |p| matches!(p, Invalid::IfcGuid { .. }),
+        ),
+        (
+            "colour of 7 digits",
+            TargetVersion::V3_0,
+            |d| d.topics[0].viewpoints[0].coloring = vec![coloring("FF00000")],
+            "topics[0].viewpoints[0].coloring[0].color",
+            |p| matches!(p, Invalid::Color { .. }),
+        ),
+        (
+            "colour with a leading hash",
+            TargetVersion::V3_0,
+            |d| d.topics[0].viewpoints[0].coloring = vec![coloring("#FF0000")],
+            "topics[0].viewpoints[0].coloring[0].color",
+            |p| matches!(p, Invalid::Color { .. }),
+        ),
+        (
+            "lowercase colour in 2.1",
+            TargetVersion::V2_1,
+            |d| d.topics[0].viewpoints[0].coloring = vec![coloring("ff0000")],
+            "topics[0].viewpoints[0].coloring[0].color",
+            |p| matches!(p, Invalid::Color { .. }),
+        ),
+        (
+            "colouring without components",
+            TargetVersion::V2_1,
+            |d| {
+                d.topics[0].viewpoints[0].coloring = vec![Coloring {
+                    color: "FF0000".into(),
+                    components: Vec::new(),
+                }];
+            },
+            "topics[0].viewpoints[0].coloring[0].components",
+            |p| matches!(p, Invalid::NoComponents),
+        ),
+        (
+            "coloured component identifying nothing",
+            TargetVersion::V3_0,
+            |d| {
+                d.topics[0].viewpoints[0].coloring = vec![Coloring {
+                    color: "FF0000".into(),
+                    components: vec![
+                        Component::ifc("0fXw$sQh19ixbI4tZgfkXu"),
+                        Component::default(),
+                    ],
+                }];
+            },
+            "topics[0].viewpoints[0].coloring[0].components[1]",
+            |p| matches!(p, Invalid::UnidentifiedComponent),
+        ),
+        (
+            "clipping plane with a zero direction",
+            TargetVersion::V2_1,
+            |d| {
+                d.topics[0].viewpoints[0].clipping_planes = vec![ClippingPlane {
+                    location: Vector3::new(1.0, 2.0, 3.0),
+                    direction: Vector3::default(),
+                }];
+            },
+            "topics[0].viewpoints[0].clipping_planes[0].direction",
+            |p| matches!(p, Invalid::Number { .. }),
+        ),
+        (
+            "clipping plane at a non-finite location",
+            TargetVersion::V3_0,
+            |d| {
+                d.topics[0].viewpoints[0].clipping_planes = vec![ClippingPlane {
+                    location: Vector3::new(0.0, f64::INFINITY, 0.0),
+                    direction: Vector3::new(0.0, 0.0, 1.0),
+                }];
+            },
+            "topics[0].viewpoints[0].clipping_planes[0].location.y",
+            |p| matches!(p, Invalid::Number { .. }),
+        ),
+        (
             "no topics at all",
             TargetVersion::V3_0,
             |d| d.topics.clear(),
@@ -648,5 +752,127 @@ fn out_of_range_deflate_levels_are_refused_before_anything_is_written() {
         ));
         assert!(write::to_path_with(&doc, &path, options).is_err());
         assert!(!path.exists(), "{} was created", path.display());
+    }
+}
+
+// --- visibility, colouring, clipping planes ---------------------------------
+
+/// The `.bcfv` of the first viewpoint of the first topic.
+fn first_visinfo(doc: &Document) -> String {
+    let bytes = write::to_vec(doc).unwrap();
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+    let name = format!("{T}/Viewpoint_{V}.bcfv");
+    let mut xml = String::new();
+    std::io::Read::read_to_string(&mut zip.by_name(&name).unwrap(), &mut xml).unwrap();
+    xml
+}
+
+/// Without `visibility`, output is exactly what 0.3.0 wrote: the golden
+/// files pin it byte for byte, and this names the element they rely on.
+#[test]
+fn no_visibility_means_everything_visible_as_before() {
+    for v in [TargetVersion::V2_1, TargetVersion::V3_0] {
+        let xml = first_visinfo(&minimal(v));
+        assert!(
+            xml.contains("    <Visibility DefaultVisibility=\"true\"/>\n"),
+            "{xml}"
+        );
+        assert!(
+            !xml.contains("Exceptions")
+                && !xml.contains("Coloring")
+                && !xml.contains("ClippingPlanes"),
+            "{xml}"
+        );
+    }
+}
+
+#[test]
+fn visibility_exceptions_are_written_in_order() {
+    for v in [TargetVersion::V2_1, TargetVersion::V3_0] {
+        let mut doc = minimal(v);
+        doc.topics[0].viewpoints[0].visibility = Some(Visibility {
+            default_visibility: false,
+            exceptions: vec![
+                Component::ifc("1Qj3z6Wtb5WwCLdW5ctWxe"),
+                Component::ifc("0fXw$sQh19ixbI4tZgfkXu"),
+            ],
+        });
+        let xml = first_visinfo(&doc);
+        let expected = "    <Visibility DefaultVisibility=\"false\">\n      <Exceptions>\n        <Component IfcGuid=\"1Qj3z6Wtb5WwCLdW5ctWxe\"/>\n        <Component IfcGuid=\"0fXw$sQh19ixbI4tZgfkXu\"/>\n      </Exceptions>\n    </Visibility>\n";
+        assert!(xml.contains(expected), "{v:?}:\n{xml}");
+        assert!(
+            xml.find("</Selection>") < xml.find("<Visibility"),
+            "Selection precedes Visibility in the schema sequence:\n{xml}"
+        );
+    }
+}
+
+/// 2.1 lists coloured components under `Color`; 3.0 wraps them in
+/// `Color/Components`. Both follow their own `visinfo.xsd`.
+#[test]
+fn colouring_follows_each_versions_shape() {
+    for (v, expected) in [
+        (
+            TargetVersion::V2_1,
+            "    <Coloring>\n      <Color Color=\"80FF0000\">\n        <Component IfcGuid=\"0fXw$sQh19ixbI4tZgfkXu\"/>\n      </Color>\n    </Coloring>\n",
+        ),
+        (
+            TargetVersion::V3_0,
+            "    <Coloring>\n      <Color Color=\"80FF0000\">\n        <Components>\n          <Component IfcGuid=\"0fXw$sQh19ixbI4tZgfkXu\"/>\n        </Components>\n      </Color>\n    </Coloring>\n",
+        ),
+    ] {
+        let mut doc = minimal(v);
+        doc.topics[0].viewpoints[0].coloring = vec![coloring("80FF0000")];
+        let xml = first_visinfo(&doc);
+        assert!(xml.contains(expected), "{v:?}:\n{xml}");
+        assert!(xml.find("</Visibility>").or(xml.find("<Visibility")) < xml.find("<Coloring>"), "{xml}");
+    }
+}
+
+/// A viewpoint with only colouring still gets `Components`, and the
+/// `Visibility` 2.1 requires inside it.
+#[test]
+fn colouring_alone_writes_components_with_visibility() {
+    let mut doc = minimal(TargetVersion::V2_1);
+    doc.topics[0].viewpoints[0].selection.clear();
+    doc.topics[0].viewpoints[0].coloring = vec![coloring("00AA00")];
+    let xml = first_visinfo(&doc);
+    assert!(!xml.contains("<Selection>"), "{xml}");
+    assert!(
+        xml.contains("<Visibility DefaultVisibility=\"true\"/>"),
+        "{xml}"
+    );
+    assert!(xml.contains("<Color Color=\"00AA00\">"), "{xml}");
+}
+
+#[test]
+fn clipping_planes_follow_the_camera() {
+    for v in [TargetVersion::V2_1, TargetVersion::V3_0] {
+        let mut doc = minimal(v);
+        doc.topics[0].viewpoints[0].clipping_planes = vec![ClippingPlane {
+            location: Vector3::new(0.0, 0.0, 3.5),
+            direction: Vector3::new(0.0, 0.0, -1.0),
+        }];
+        let xml = first_visinfo(&doc);
+        let expected = "  <ClippingPlanes>\n    <ClippingPlane>\n      <Location>\n        <X>0</X>\n        <Y>0</Y>\n        <Z>3.5</Z>\n      </Location>\n      <Direction>\n        <X>0</X>\n        <Y>0</Y>\n        <Z>-1</Z>\n      </Direction>\n    </ClippingPlane>\n  </ClippingPlanes>\n</VisualizationInfo>\n";
+        assert!(xml.ends_with(expected), "{v:?}:\n{xml}");
+        assert!(
+            xml.find("</PerspectiveCamera>") < xml.find("<ClippingPlanes>"),
+            "{xml}"
+        );
+    }
+}
+
+/// The styled samples still read back cleanly: the reader ignores what it
+/// does not model rather than tripping over it.
+#[test]
+fn styled_viewpoints_read_back_without_diagnostics() {
+    for (stem, doc) in fixture::samples() {
+        let archive = openbim_bcf::read_slice(&write::to_vec(&doc).unwrap()).unwrap();
+        assert!(
+            archive.diagnostics().is_empty(),
+            "{stem}: {:?}",
+            archive.diagnostics()
+        );
     }
 }
