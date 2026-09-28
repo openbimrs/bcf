@@ -18,7 +18,7 @@ suite means nothing unless the suite can fail.
 
 ## Project conventions
 
-- Rust 2021, MSRV 1.85, AGPL-3.0-or-later, `#![forbid(unsafe_code)]`, pure Rust.
+- Rust 2021, MSRV 1.88, AGPL-3.0-or-later, `#![forbid(unsafe_code)]`, pure Rust.
 - BCF-specific models, version semantics, tolerance policy, diagnostics, and
   archive safety stay here. Shared openBIM domain vocabulary lives in
   `openbim-core`.

@@ -182,7 +182,7 @@ fn days_in_month(year: &str, month: u32) -> u32 {
             // Leap-year rule on the last four digits is exact: 400 divides
             // 10 000, so higher digits never change the answer.
             let y: u32 = year[year.len() - 4..].parse().unwrap_or(1);
-            if (y % 4 == 0 && y % 100 != 0) || y % 400 == 0 {
+            if (y.is_multiple_of(4) && !y.is_multiple_of(100)) || y.is_multiple_of(400) {
                 29
             } else {
                 28
