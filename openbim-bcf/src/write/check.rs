@@ -45,6 +45,23 @@ pub(super) fn ifc_guid(value: &str) -> Result<(), Invalid> {
     }
 }
 
+/// A `Color` attribute: 6 or 8 hex digits. 2.1's `visinfo.xsd` pattern is
+/// `[0-9,A-F]{6}([0-9,A-F]{2})?` — uppercase only (the comma is a typo in
+/// the regex, not a digit); 3.0 widened it to `[0-9A-Fa-f]`.
+pub(super) fn color(value: &str, version: TargetVersion) -> Result<(), Invalid> {
+    let digit = |c: u8| match version {
+        TargetVersion::V2_1 => c.is_ascii_digit() || (b'A'..=b'F').contains(&c),
+        TargetVersion::V3_0 => c.is_ascii_hexdigit(),
+    };
+    if matches!(value.len(), 6 | 8) && value.bytes().all(digit) {
+        Ok(())
+    } else {
+        Err(Invalid::Color {
+            value: value.to_string(),
+        })
+    }
+}
+
 /// A text value the reader will return verbatim.
 ///
 /// Refused: empty or blank (3.0 types these `NonEmptyOrBlankString`, and the
@@ -228,6 +245,32 @@ mod tests {
             "4fXw$sQh19ixbI4tZgfkXu",  // leading char encodes > 2 bits
         ] {
             assert!(ifc_guid(bad).is_err(), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn colors_are_6_or_8_hex_digits_in_the_version_case() {
+        for ok in ["FF0000", "80FF0000", "00AAFF", "0A0B0C0D"] {
+            assert!(color(ok, TargetVersion::V2_1).is_ok(), "{ok}");
+            assert!(color(ok, TargetVersion::V3_0).is_ok(), "{ok}");
+        }
+        assert!(color("ff0000", TargetVersion::V3_0).is_ok());
+        assert!(
+            color("ff0000", TargetVersion::V2_1).is_err(),
+            "2.1 is uppercase only"
+        );
+        for bad in [
+            "",
+            "FFF",
+            "FF000",
+            "FF00000",
+            "FF0000000",
+            "#FF0000",
+            "GG0000",
+            "FF,000",
+        ] {
+            assert!(color(bad, TargetVersion::V2_1).is_err(), "{bad}");
+            assert!(color(bad, TargetVersion::V3_0).is_err(), "{bad}");
         }
     }
 

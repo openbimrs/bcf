@@ -8,7 +8,8 @@
 //! authoring-tool id, and both camera kinds.
 
 use openbim_bcf::write::{
-    Camera, Comment, Document, Extensions, Projection, TargetVersion, Topic, Vector3, Viewpoint,
+    Camera, ClippingPlane, Coloring, Comment, Document, Extensions, Projection, TargetVersion,
+    Topic, Vector3, Viewpoint, Visibility,
 };
 use openbim_bcf::Component;
 
@@ -24,6 +25,8 @@ pub fn samples() -> Vec<(&'static str, Document)> {
             "sample-3.0-derived-extensions",
             sample(TargetVersion::V3_0, None),
         ),
+        ("sample-2.1-styled", styled(TargetVersion::V2_1)),
+        ("sample-3.0-styled", styled(TargetVersion::V3_0)),
     ]
 }
 
@@ -107,6 +110,7 @@ fn sample(version: TargetVersion, extensions: Option<Extensions>) -> Document {
                             up_vector: Vector3::new(0.0, 0.0, 1.0),
                             aspect_ratio,
                         }),
+                        ..Viewpoint::default()
                     },
                     Viewpoint {
                         guid: "8f2e3d4c-5b6a-4798-8b2c-3d4e5f6a7b8c".into(),
@@ -120,6 +124,7 @@ fn sample(version: TargetVersion, extensions: Option<Extensions>) -> Document {
                             up_vector: Vector3::new(0.0, 1.0, 0.0),
                             aspect_ratio,
                         }),
+                        ..Viewpoint::default()
                     },
                 ],
             },
@@ -138,5 +143,113 @@ fn sample(version: TargetVersion, extensions: Option<Extensions>) -> Document {
                 ..Topic::default()
             },
         ],
+    }
+}
+
+/// Viewpoints exercising visibility exceptions, colouring, and clipping
+/// planes, alone and combined, so every optional branch of `Components` is
+/// XSD-validated.
+fn styled(version: TargetVersion) -> Document {
+    let v3 = version == TargetVersion::V3_0;
+    let camera = Some(Camera {
+        projection: Projection::Perspective {
+            field_of_view: 45.0,
+        },
+        view_point: Vector3::new(10.0, -10.0, 8.0),
+        direction: Vector3::new(-0.5, 0.5, -0.4),
+        up_vector: Vector3::new(0.0, 0.0, 1.0),
+        aspect_ratio: v3.then_some(1.25),
+    });
+    let subject = Component {
+        ifc_guid: Some("0fXw$sQh19ixbI4tZgfkXu".into()),
+        originating_system: Some("Revit 2026".into()),
+        authoring_tool_id: None,
+    };
+    let related = Component::ifc("1Qj3z6Wtb5WwCLdW5ctWxe");
+    let by_tool = Component {
+        authoring_tool_id: Some("ARCHICAD:77".into()),
+        ..Component::default()
+    };
+    Document {
+        version,
+        extensions: None,
+        topics: vec![Topic {
+            guid: "5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d".into(),
+            title: "Brandschutz: Durchbruch ohne Abschottung".into(),
+            topic_type: Some("Clash".into()),
+            topic_status: Some("Open".into()),
+            creation_date: "2026-09-28T09:00:00Z".into(),
+            creation_author: "checker@example.com".into(),
+            viewpoints: vec![
+                // Everything at once: isolate the involved objects, colour the
+                // subject red and the related objects half-transparent blue,
+                // and cut the view twice.
+                Viewpoint {
+                    guid: "6b7c8d9e-0f1a-4b2c-9d3e-4f5a6b7c8d9e".into(),
+                    selection: vec![subject.clone()],
+                    camera,
+                    visibility: Some(Visibility {
+                        default_visibility: false,
+                        exceptions: vec![subject.clone(), related.clone(), by_tool.clone()],
+                    }),
+                    coloring: vec![
+                        Coloring {
+                            color: "FF0000".into(),
+                            components: vec![subject.clone()],
+                        },
+                        Coloring {
+                            // AARRGGBB, alpha first. 3.0 also accepts lowercase.
+                            color: if v3 { "800000ff" } else { "800000FF" }.into(),
+                            components: vec![related.clone(), by_tool],
+                        },
+                    ],
+                    clipping_planes: vec![
+                        ClippingPlane {
+                            location: Vector3::new(0.0, 0.0, 3.5),
+                            direction: Vector3::new(0.0, 0.0, 1.0),
+                        },
+                        ClippingPlane {
+                            location: Vector3::new(12.25, 0.0, 0.0),
+                            direction: Vector3::new(-1.0, 0.0, 0.0),
+                        },
+                    ],
+                },
+                // Hide only the listed component; no selection.
+                Viewpoint {
+                    guid: "7c8d9e0f-1a2b-4c3d-8e4f-5a6b7c8d9e0f".into(),
+                    camera,
+                    visibility: Some(Visibility {
+                        default_visibility: true,
+                        exceptions: vec![related],
+                    }),
+                    ..Viewpoint::default()
+                },
+                // Colouring alone still writes the Visibility 2.1 requires.
+                Viewpoint {
+                    guid: "8d9e0f1a-2b3c-4d4e-9f5a-6b7c8d9e0f1a".into(),
+                    camera,
+                    coloring: vec![Coloring {
+                        color: "00AA00".into(),
+                        components: vec![subject],
+                    }],
+                    ..Viewpoint::default()
+                },
+                // Nothing visible and no exceptions; one clipping plane.
+                Viewpoint {
+                    guid: "9e0f1a2b-3c4d-4e5f-8a6b-7c8d9e0f1a2b".into(),
+                    camera,
+                    visibility: Some(Visibility {
+                        default_visibility: false,
+                        exceptions: Vec::new(),
+                    }),
+                    clipping_planes: vec![ClippingPlane {
+                        location: Vector3::default(),
+                        direction: Vector3::new(0.0, 1.0, 0.0),
+                    }],
+                    ..Viewpoint::default()
+                },
+            ],
+            ..Topic::default()
+        }],
     }
 }
