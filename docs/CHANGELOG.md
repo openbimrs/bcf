@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **zip 2.4 → 8** (#9), so consumers on a current `zip` carry one version
+  instead of two. Deflate now goes through `flate2` with `zlib-rs` (**Zlib
+  licence**; allow `Zlib` if you run `cargo deny` licence checks). The
+  unused Zopfli encoder is no longer pulled in. No public API change: no
+  `zip` type appears in this crate's API.
+- **MSRV 1.85 → 1.88**, required by zip 8.
+- Stored output is byte-identical to zip 2's: the golden files are
+  unchanged, so the "identical across dependency upgrades" guarantee held
+  across this one. The official-corpus report is unchanged too.
+
 ## [0.4.0] - 2026-09-28
 
 ### Added
