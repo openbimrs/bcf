@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-28
+
 ### Changed
 
 - **zip 2.4 → 8** (#9), so consumers on a current `zip` carry one version
@@ -136,7 +138,8 @@ else.
   placement was consulted, losing 9 comments across the official corpus.
 - `Topic/Labels/Label` (3.0) is read in addition to repeated `Labels` (2.x).
 
-[Unreleased]: https://github.com/openbimrs/bcf/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/openbimrs/bcf/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/openbimrs/bcf/releases/tag/v0.5.0
 [0.4.0]: https://github.com/openbimrs/bcf/releases/tag/v0.4.0
 [0.3.0]: https://github.com/openbimrs/bcf/releases/tag/v0.3.0
 [0.2.0]: https://github.com/openbimrs/bcf/tree/22a1b10
