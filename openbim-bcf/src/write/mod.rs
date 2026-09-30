@@ -68,6 +68,7 @@
 //! - A type, status, priority, or label missing from supplied
 //!   [`Extensions`].
 //! - A comment anchored to a viewpoint the topic does not have.
+//! - A snapshot that does not start with the PNG signature.
 //! - A colour that is not 6 or 8 hex digits (uppercase only in 2.1, as its
 //!   schema says), a colouring without components, and a clipping plane with
 //!   a zero direction.
@@ -75,9 +76,9 @@
 //! # Scope
 //!
 //! Topics carry GUID, title, description, type, status, priority, labels,
-//! creation author and date, comments, and viewpoints. A viewpoint carries a
+//! creation author and date, assignee, due date, comments, and viewpoints. A viewpoint carries a
 //! component selection, visibility with exceptions, colouring, clipping
-//! planes, and optionally a camera. Header files, snapshots, lines, bitmaps,
+//! planes, a PNG snapshot, and optionally a camera. Header files, lines, bitmaps,
 //! view setup hints, document references, and `project.bcfp` are not
 //! written.
 
@@ -120,8 +121,8 @@ pub struct Document {
     pub version: TargetVersion,
     /// The project's vocabulary.
     ///
-    /// When supplied, every topic's type, status, priority, and labels must
-    /// be listed in it. For 3.0 it is written as `extensions.xml`; when
+    /// When supplied, every topic's type, status, priority, labels, and
+    /// assignee must be listed in it. For 3.0 it is written as `extensions.xml`; when
     /// `None`, a 3.0 archive gets one listing exactly the values the topics
     /// use, in order of first use. For 2.1 it is a check only: 2.1 expresses
     /// the vocabulary as an `extensions.xsd`, which this crate does not write.
@@ -141,8 +142,8 @@ pub struct Extensions {
     pub priorities: Vec<String>,
     /// Allowed labels.
     pub topic_labels: Vec<String>,
-    /// Known users. Written, not checked: this crate writes no field the 3.0
-    /// schema ties to it.
+    /// Known users. When supplied, every topic's `assigned_to` must be
+    /// listed; creation and comment authors are not checked against it.
     pub users: Vec<String>,
     /// Allowed `BimSnippet` types. Written, not checked.
     pub snippet_types: Vec<String>,
@@ -174,6 +175,11 @@ pub struct Topic {
     pub creation_date: String,
     /// Creation author.
     pub creation_author: String,
+    /// Who the topic is assigned to. In 3.0 a user of the project: listed in
+    /// supplied [`Extensions::users`], or added to the derived ones.
+    pub assigned_to: Option<String>,
+    /// When the topic is due, an `xs:dateTime`.
+    pub due_date: Option<String>,
     /// Comments, in order.
     pub comments: Vec<Comment>,
     /// Viewpoints, in order.
@@ -212,6 +218,28 @@ pub struct Viewpoint {
     pub coloring: Vec<Coloring>,
     /// Planes cutting the view, in order.
     pub clipping_planes: Vec<ClippingPlane>,
+    /// The rendered image, written as `Snapshot_<guid>.png` next to the
+    /// `.bcfv` and referenced from the markup.
+    pub snapshot: Option<Snapshot>,
+}
+
+/// A viewpoint's snapshot image, written byte for byte, never re-encoded.
+///
+/// PNG only for now; both BCF versions also allow JPEG, which is why this is
+/// `#[non_exhaustive]` and built with [`Snapshot::png`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct Snapshot {
+    /// The PNG file. Must start with the PNG signature.
+    pub png: Vec<u8>,
+}
+
+impl Snapshot {
+    /// A snapshot from the bytes of a PNG file.
+    #[must_use]
+    pub fn png(bytes: impl Into<Vec<u8>>) -> Self {
+        Self { png: bytes.into() }
+    }
 }
 
 /// Component visibility in a [`Viewpoint`].
@@ -381,6 +409,8 @@ pub enum Invalid {
     },
     /// A colouring with no components; the schema requires at least one.
     NoComponents,
+    /// Snapshot bytes that do not start with the PNG signature.
+    Snapshot,
     /// A number outside its allowed range.
     Number {
         /// The value as given.
@@ -431,6 +461,7 @@ impl fmt::Display for Invalid {
             }
             Invalid::Color { value } => write!(f, "{value:?} is not a 6- or 8-digit hex colour"),
             Invalid::NoComponents => f.write_str("a colouring needs at least one component"),
+            Invalid::Snapshot => f.write_str("snapshot is not a PNG file (no PNG signature)"),
             Invalid::UnidentifiedComponent => {
                 f.write_str("component has neither IfcGuid nor AuthoringToolId")
             }

@@ -13,7 +13,7 @@ categories = ["parser-implementations", "encoding", "data-structures"]
 
 [dependencies]
 openbim-core = "0.1"
-quick-xml = "0.37"
+quick-xml = "0.42"
 # Deflate through flate2 + zlib-rs only: BCF archives in the corpus are stored
 # or deflated, the other codecs would pull in C toolchains this workspace does
 # not accept, and zip's `deflate` umbrella would add the Zopfli encoder, which

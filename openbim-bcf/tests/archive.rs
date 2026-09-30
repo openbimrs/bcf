@@ -373,3 +373,35 @@ fn an_oversized_viewpoint_is_reported_not_buffered() {
         archive.diagnostics()
     );
 }
+
+/// What the XML layer rejects costs one topic, reported as a diagnostic;
+/// what it tolerates (a repeated attribute) costs nothing. Neither is a
+/// hard error for the archive.
+#[test]
+fn xml_level_rejections_are_diagnostics_not_archive_errors() {
+    let unknown_entity = r#"<Markup><Topic Guid="t2"><Title>a &nbsp; b</Title></Topic></Markup>"#;
+    let repeated_attr = r#"<Markup><Topic Guid="t3" Guid="t4" TopicStatus="Open"><Title>Twice</Title></Topic></Markup>"#;
+    let bytes = zip_of(&[
+        ("bcf.version", &version_entry("2.1")),
+        ("t1/markup.bcf", MARKUP_2_1.as_bytes()),
+        ("t1/viewpoint.bcfv", b"<VisualizationInfo/>"),
+        ("t1/snapshot.png", b"\x89PNG\r\n\x1a\n"),
+        ("t2/markup.bcf", unknown_entity.as_bytes()),
+        ("t3/markup.bcf", repeated_attr.as_bytes()),
+    ]);
+    let archive = openbim_bcf::read_slice(&bytes).unwrap();
+    let titles: Vec<_> = archive.topics().map(|t| t.title().to_string()).collect();
+    assert_eq!(titles, ["Kollision Lüftung", "Twice"]);
+    assert_eq!(
+        archive.topics().nth(1).unwrap().topic.guid.as_deref(),
+        Some("t3"),
+        "first attribute wins"
+    );
+    let d = archive.diagnostics();
+    assert_eq!(d.len(), 1, "{d:?}");
+    assert_eq!(d[0].entry.as_deref(), Some("t2/markup.bcf"));
+    assert!(
+        matches!(&d[0].tolerance, Tolerance::UnreadableMarkup { detail } if detail.contains("nbsp")),
+        "{d:?}"
+    );
+}

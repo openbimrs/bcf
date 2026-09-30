@@ -120,8 +120,8 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
     (
         "namespace prefixes not stripped from element names",
         "openbim-bcf/src/xml.rs",
-        "    match s.rsplit_once(':') {\n        Some((_, local)) => local.to_string(),\n        None => s.into_owned(),\n    }",
-        "    s.into_owned()",
+        "    match raw.rsplit_once(':') {\n        Some((_, local)) => local.to_string(),\n        None => raw.to_string(),\n    }",
+        "    raw.to_string()",
     ),
     (
         "writer accepts a malformed GUID",
@@ -224,6 +224,42 @@ MUTATIONS: list[tuple[str, str, str, str]] = [
         "openbim-bcf/src/write/emit.rs",
         "                if v3 {\n                    x.open(\"Components\", &[]);",
         "                if false {\n                    x.open(\"Components\", &[]);",
+    ),
+    (
+        "writer accepts a due date outside xs:dateTime",
+        "openbim-bcf/src/write/emit.rs",
+        "            date(&format!(\"{at}.due_date\"), d)?;",
+        "            let _ = d;",
+    ),
+    (
+        "writer ignores supplied users for the assignee",
+        "openbim-bcf/src/write/emit.rs",
+        "            self.listed(&format!(\"{at}.assigned_to\"), a, |e| &e.users)?;",
+        "            text(&format!(\"{at}.assigned_to\"), a)?;",
+    ),
+    (
+        "writer accepts a snapshot that is not a PNG",
+        "openbim-bcf/src/write/emit.rs",
+        "            if !s.png.starts_with(PNG_SIGNATURE) {",
+        "            if false && !s.png.starts_with(PNG_SIGNATURE) {",
+    ),
+    (
+        "writer omits the markup's snapshot reference",
+        "openbim-bcf/src/write/emit.rs",
+        "        if vp.snapshot.is_some() {",
+        "        if false && vp.snapshot.is_some() {",
+    ),
+    (
+        "reader drops character references",
+        "openbim-bcf/src/xml.rs",
+        "                        Some(ch) => top.text.push(ch),",
+        "                        Some(_) => {}",
+    ),
+    (
+        "reader skips the XML line-ending normalisation",
+        "openbim-bcf/src/xml.rs",
+        "                    top.text.push_str(&t.xml_content(version));",
+        "                    top.text.push_str(&t.into_inner());",
     ),
 ]
 

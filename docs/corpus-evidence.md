@@ -117,11 +117,11 @@ consuming them — so its evidence is executable instead:
 
 | Claim | Evidence |
 | --- | --- |
-| Written 2.1 and 3.0 archives are schema-valid | `scripts/validate-written.py` validates every entry of the five `write-samples` archives against the official XSDs, and first proves it rejects nine known violations |
+| Written 2.1 and 3.0 archives are schema-valid | `scripts/validate-written.py` validates every entry of the eight `write-samples` archives against the official XSDs (a snapshot, having no schema, must carry the PNG signature and be referenced by its topic's markup), and first proves it rejects twelve known violations |
 | They read back with zero diagnostics and equal content | `written_archives_round_trip_through_the_reader` |
 | Identical input gives identical bytes | `output_is_byte_identical_to_the_golden_files`, over `openbim-bcf/tests/golden/` (default, stored) |
 | Opt-in deflate round-trips and is reproducible within a build | `deflated_archives_round_trip_and_are_deterministic_within_a_build`; not golden-pinned, because deflate bytes depend on the codec version |
-| Invalid values are refused, with their location | `malformed_values_are_refused_with_their_location` (32 cases), `values_missing_from_supplied_extensions_are_refused` |
+| Invalid values are refused, with their location | `malformed_values_are_refused_with_their_location` (37 cases), `values_missing_from_supplied_extensions_are_refused` |
 
 The golden files are this repository's own output, not buildingSMART
 material, so committing them is licence-clean.

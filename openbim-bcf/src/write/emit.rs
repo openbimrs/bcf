@@ -180,6 +180,12 @@ impl Ctx<'_> {
         }
         date(&format!("{at}.creation_date"), &t.creation_date)?;
         text(&format!("{at}.creation_author"), &t.creation_author)?;
+        if let Some(d) = &t.due_date {
+            date(&format!("{at}.due_date"), d)?;
+        }
+        if let Some(a) = &t.assigned_to {
+            self.listed(&format!("{at}.assigned_to"), a, |e| &e.users)?;
+        }
         if let Some(d) = &t.description {
             text(&format!("{at}.description"), d)?;
         }
@@ -189,6 +195,11 @@ impl Ctx<'_> {
         for (i, vp) in t.viewpoints.iter().enumerate() {
             let bytes = self.viewpoint(&format!("{at}.viewpoints[{i}]"), vp)?;
             viewpoint_entries.push((format!("{}/{}", t.guid, viewpoint_file(vp)), bytes));
+            // Directly after its .bcfv, verbatim.
+            if let Some(s) = &vp.snapshot {
+                viewpoint_entries
+                    .push((format!("{}/{}", t.guid, snapshot_file(vp)), s.png.clone()));
+            }
         }
         for (i, c) in t.comments.iter().enumerate() {
             self.comment(&format!("{at}.comments[{i}]"), c, &t.viewpoints)?;
@@ -227,6 +238,11 @@ impl Ctx<'_> {
 
     fn viewpoint(&mut self, at: &str, vp: &Viewpoint) -> Result<Vec<u8>, WriteError> {
         self.guid(&format!("{at}.guid"), &vp.guid)?;
+        if let Some(s) = &vp.snapshot {
+            if !s.png.starts_with(PNG_SIGNATURE) {
+                return Err(bad(format!("{at}.snapshot"), Invalid::Snapshot));
+            }
+        }
         for (i, c) in vp.selection.iter().enumerate() {
             component(&format!("{at}.selection[{i}]"), c)?;
         }
@@ -422,8 +438,19 @@ fn derive_extensions(topics: &[Topic]) -> Extensions {
         for v in &t.labels {
             push(&mut ext.topic_labels, v);
         }
+        if let Some(v) = &t.assigned_to {
+            push(&mut ext.users, v);
+        }
     }
     ext
+}
+
+/// The eight bytes every PNG file starts with (PNG specification, 5.2).
+const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
+
+fn snapshot_file(vp: &Viewpoint) -> String {
+    // The naming the official 3.0 test archives use.
+    format!("Snapshot_{}.png", vp.guid)
 }
 
 fn viewpoint_file(vp: &Viewpoint) -> String {
@@ -616,6 +643,14 @@ fn markup_xml(version: TargetVersion, t: &Topic) -> Vec<u8> {
     }
     x.leaf("CreationDate", &t.creation_date);
     x.leaf("CreationAuthor", &t.creation_author);
+    // Topic sequence: … CreationAuthor, ModifiedDate?, ModifiedAuthor?,
+    // DueDate?, AssignedTo?, Stage?, Description? … in 2.1 and 3.0 alike.
+    if let Some(d) = &t.due_date {
+        x.leaf("DueDate", d);
+    }
+    if let Some(a) = &t.assigned_to {
+        x.leaf("AssignedTo", a);
+    }
     if let Some(d) = &t.description {
         x.leaf("Description", d);
     }
@@ -660,7 +695,11 @@ fn comments_xml(x: &mut Xml, comments: &[Comment]) {
 fn viewpoint_refs_xml(x: &mut Xml, element: &str, viewpoints: &[Viewpoint]) {
     for vp in viewpoints {
         x.open(element, &[("Guid", &vp.guid)]);
+        // ViewPoint sequence: Viewpoint?, Snapshot?, Index? (2.1 and 3.0).
         x.leaf("Viewpoint", &viewpoint_file(vp));
+        if vp.snapshot.is_some() {
+            x.leaf("Snapshot", &snapshot_file(vp));
+        }
         x.close(element);
     }
 }
