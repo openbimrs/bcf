@@ -105,10 +105,10 @@ write::to_path_with(&doc, "issues.bcfzip", options)?;
 ```
 
 Written per topic: GUID, title, description, type, status, priority, labels,
-creation author and date, comments, and viewpoints with a component selection,
-visibility with exceptions, colouring, clipping planes, and an optional camera.
-Header files, snapshots, lines, bitmaps, and document references are not
-written.
+creation author and date, assignee, due date, comments, and viewpoints with a
+component selection, visibility with exceptions, colouring, clipping planes, a
+PNG snapshot, and an optional camera. Header files, JPEG snapshots, lines,
+bitmaps, and document references are not written.
 
 ## Version detection reports its evidence
 
@@ -157,7 +157,9 @@ trusting:
 | Reading project extensions (`.bcfp`, `extensions.xml`/`.xsd`) | **not implemented** |
 | Writing 2.1 and 3.0: topics, comments, component selections, cameras, 3.0 `extensions.xml` | implemented; XSD-validated, round-tripped, golden-pinned |
 | Writing viewpoint visibility exceptions, colouring, clipping planes | implemented; XSD-validated, golden-pinned; not read back |
-| Writing header files, snapshots, lines, bitmaps, document references, `project.bcfp` | **not implemented** |
+| Writing topic assignee and due date | implemented; XSD-validated, round-tripped, golden-pinned |
+| Writing PNG snapshots | implemented; markup XSD-validated, bytes round-tripped verbatim, golden-pinned |
+| Writing header files, JPEG snapshots, lines, bitmaps, document references, `project.bcfp` | **not implemented** |
 | Writing BCF 2.0 | **not implemented** (read-only) |
 
 Read and write support are tracked separately and must never be inferred from
@@ -172,14 +174,14 @@ one another. BCF-API (S1006) is a distinct standard and out of scope here.
 ```
 
 The gate is authoritative and decides from exit codes. `mutation-probes.py`
-injects 34 plausible defects — silent conflict resolution, dropped diagnostics,
+injects 40 plausible defects — silent conflict resolution, dropped diagnostics,
 tolerated path traversal, normalised status strings, a writer that accepts
 malformed GUIDs or deflates its output — and requires the gate to catch every
-one. All 34 are caught.
+one. All 40 are caught.
 
 `validate-written.py` needs the fetched schemas and `lxml`; the gate runs it
 whenever the schemas are present. It first proves it can fail by feeding the
-validator nine known schema violations.
+validator twelve known schema violations.
 
 The official corpus is fetched, not vendored (CC BY-ND); see
 `references/README.md`.

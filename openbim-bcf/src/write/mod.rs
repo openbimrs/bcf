@@ -68,6 +68,7 @@
 //! - A type, status, priority, or label missing from supplied
 //!   [`Extensions`].
 //! - A comment anchored to a viewpoint the topic does not have.
+//! - A snapshot that does not start with the PNG signature.
 //! - A colour that is not 6 or 8 hex digits (uppercase only in 2.1, as its
 //!   schema says), a colouring without components, and a clipping plane with
 //!   a zero direction.
@@ -77,7 +78,7 @@
 //! Topics carry GUID, title, description, type, status, priority, labels,
 //! creation author and date, assignee, due date, comments, and viewpoints. A viewpoint carries a
 //! component selection, visibility with exceptions, colouring, clipping
-//! planes, and optionally a camera. Header files, snapshots, lines, bitmaps,
+//! planes, a PNG snapshot, and optionally a camera. Header files, lines, bitmaps,
 //! view setup hints, document references, and `project.bcfp` are not
 //! written.
 
@@ -217,6 +218,28 @@ pub struct Viewpoint {
     pub coloring: Vec<Coloring>,
     /// Planes cutting the view, in order.
     pub clipping_planes: Vec<ClippingPlane>,
+    /// The rendered image, written as `Snapshot_<guid>.png` next to the
+    /// `.bcfv` and referenced from the markup.
+    pub snapshot: Option<Snapshot>,
+}
+
+/// A viewpoint's snapshot image, written byte for byte, never re-encoded.
+///
+/// PNG only for now; both BCF versions also allow JPEG, which is why this is
+/// `#[non_exhaustive]` and built with [`Snapshot::png`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct Snapshot {
+    /// The PNG file. Must start with the PNG signature.
+    pub png: Vec<u8>,
+}
+
+impl Snapshot {
+    /// A snapshot from the bytes of a PNG file.
+    #[must_use]
+    pub fn png(bytes: impl Into<Vec<u8>>) -> Self {
+        Self { png: bytes.into() }
+    }
 }
 
 /// Component visibility in a [`Viewpoint`].
@@ -386,6 +409,8 @@ pub enum Invalid {
     },
     /// A colouring with no components; the schema requires at least one.
     NoComponents,
+    /// Snapshot bytes that do not start with the PNG signature.
+    Snapshot,
     /// A number outside its allowed range.
     Number {
         /// The value as given.
@@ -436,6 +461,7 @@ impl fmt::Display for Invalid {
             }
             Invalid::Color { value } => write!(f, "{value:?} is not a 6- or 8-digit hex colour"),
             Invalid::NoComponents => f.write_str("a colouring needs at least one component"),
+            Invalid::Snapshot => f.write_str("snapshot is not a PNG file (no PNG signature)"),
             Invalid::UnidentifiedComponent => {
                 f.write_str("component has neither IfcGuid nor AuthoringToolId")
             }

@@ -195,6 +195,11 @@ impl Ctx<'_> {
         for (i, vp) in t.viewpoints.iter().enumerate() {
             let bytes = self.viewpoint(&format!("{at}.viewpoints[{i}]"), vp)?;
             viewpoint_entries.push((format!("{}/{}", t.guid, viewpoint_file(vp)), bytes));
+            // Directly after its .bcfv, verbatim.
+            if let Some(s) = &vp.snapshot {
+                viewpoint_entries
+                    .push((format!("{}/{}", t.guid, snapshot_file(vp)), s.png.clone()));
+            }
         }
         for (i, c) in t.comments.iter().enumerate() {
             self.comment(&format!("{at}.comments[{i}]"), c, &t.viewpoints)?;
@@ -233,6 +238,11 @@ impl Ctx<'_> {
 
     fn viewpoint(&mut self, at: &str, vp: &Viewpoint) -> Result<Vec<u8>, WriteError> {
         self.guid(&format!("{at}.guid"), &vp.guid)?;
+        if let Some(s) = &vp.snapshot {
+            if !s.png.starts_with(PNG_SIGNATURE) {
+                return Err(bad(format!("{at}.snapshot"), Invalid::Snapshot));
+            }
+        }
         for (i, c) in vp.selection.iter().enumerate() {
             component(&format!("{at}.selection[{i}]"), c)?;
         }
@@ -433,6 +443,14 @@ fn derive_extensions(topics: &[Topic]) -> Extensions {
         }
     }
     ext
+}
+
+/// The eight bytes every PNG file starts with (PNG specification, 5.2).
+const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
+
+fn snapshot_file(vp: &Viewpoint) -> String {
+    // The naming the official 3.0 test archives use.
+    format!("Snapshot_{}.png", vp.guid)
 }
 
 fn viewpoint_file(vp: &Viewpoint) -> String {
@@ -677,7 +695,11 @@ fn comments_xml(x: &mut Xml, comments: &[Comment]) {
 fn viewpoint_refs_xml(x: &mut Xml, element: &str, viewpoints: &[Viewpoint]) {
     for vp in viewpoints {
         x.open(element, &[("Guid", &vp.guid)]);
+        // ViewPoint sequence: Viewpoint?, Snapshot?, Index? (2.1 and 3.0).
         x.leaf("Viewpoint", &viewpoint_file(vp));
+        if vp.snapshot.is_some() {
+            x.leaf("Snapshot", &snapshot_file(vp));
+        }
         x.close(element);
     }
 }

@@ -15,6 +15,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   assignee is text like every other field. In 3.0 the assignee is a project
   user: it must be listed in supplied `Extensions::users`, and derived
   extensions list every assignee under `Users` in first-use order.
+- `write::Viewpoint` gained `snapshot: Option<Snapshot>` (#12): a PNG written
+  verbatim as `<topic>/Snapshot_<viewpoint guid>.png`, directly after the
+  viewpoint's `.bcfv`, and referenced from the markup's `Snapshot` element
+  after `Viewpoint`, as both schemas order it. Bytes without the PNG
+  signature are refused as `Invalid::Snapshot`, and nothing is written.
+  `Snapshot` is `#[non_exhaustive]` and built with `Snapshot::png(bytes)`,
+  so JPEG can be added later without breaking callers.
+- Three XSD-validated review samples, three new negative controls in
+  `scripts/validate-written.py` (which now also checks every written PNG and
+  its markup reference), and six mutation probes (40 in total).
+
+### Changed
+
+- **Breaking:** `write::Topic` gained `assigned_to` and `due_date`, and
+  `write::Viewpoint` gained `snapshot`, so struct literals must set them or
+  end in `..Default::default()`. With them unset, output is byte-identical
+  to 0.5.0: the five golden files from 0.5.0 are unchanged.
 
 ### Security
 
@@ -24,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   practical exposure was low: the reader already skipped the duplicate check
   (`with_checks(false)`) and never used `NsReader`.
 
-### Changed
+### Changed (reader)
 
 - **Line endings in read text are normalised to `\n`**, as XML 1.0 section
   2.11 requires of every parser; quick-xml 0.37 did not. Measured: 6 text

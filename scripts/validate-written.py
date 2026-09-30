@@ -9,6 +9,7 @@ written archive against the buildingSMART schema of the version its
     extensions.xml  -> extensions.xsd (3.0)
     */markup.bcf    -> markup.xsd
     */*.bcfv        -> visinfo.xsd
+    */*.png         -> PNG signature, and referenced by the topic's markup
 
 An entry of any other kind fails the run: the writer must not emit files this
 script does not know how to check.
@@ -74,6 +75,22 @@ def declared_version(z: zipfile.ZipFile) -> str:
     return etree.fromstring(z.read("bcf.version")).get("VersionId")
 
 
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+
+
+def check_snapshot(z: zipfile.ZipFile, entry: str) -> list[str]:
+    """A snapshot has no schema: it must be a PNG, and its topic's markup
+    must reference it, or it is an orphan no viewer will show."""
+    problems = []
+    if not z.read(entry).startswith(PNG_SIGNATURE):
+        problems.append("not a PNG (no signature)")
+    topic, name = entry.rsplit("/", 1)
+    markup = etree.fromstring(z.read(f"{topic}/markup.bcf"))
+    if name not in {s.text for s in markup.iter("Snapshot")}:
+        problems.append(f"not referenced by {topic}/markup.bcf")
+    return problems
+
+
 def validate_archive(path: Path) -> list[str]:
     problems = []
     with zipfile.ZipFile(path) as z:
@@ -81,6 +98,10 @@ def validate_archive(path: Path) -> list[str]:
         if version not in ("2.1", "3.0"):
             return [f"{path.name}: unexpected VersionId {version!r}"]
         for entry in z.namelist():
+            if entry.endswith(".png"):
+                for err in check_snapshot(z, entry):
+                    problems.append(f"{path.name}:{entry}: {err}")
+                continue
             xsd = schema_for(entry, version)
             if xsd is None:
                 problems.append(f"{path.name}:{entry}: no schema for this entry kind")
@@ -155,6 +176,22 @@ NEGATIVE_CONTROLS = [
         lambda e: e.endswith("/markup.bcf"),
         (b"<DueDate>2026-10-15T17:00:00+02:00</DueDate>\n    <AssignedTo>", b"</AssignedTo>"),
         b"<AssignedTo>reviewer@example.com</AssignedTo>\n    <DueDate>2026-10-15T17:00:00+02:00</DueDate>",
+    ),
+    (
+        "3.0 Snapshot before Viewpoint",
+        "sample-3.0-review",
+        lambda e: e.endswith("/markup.bcf"),
+        (b"<Viewpoint>Viewpoint_e4f5a6b7", b"</Snapshot>"),
+        b"<Snapshot>Snapshot_e4f5a6b7-c8d9-4e0f-9a1b-2c3d4e5f6a7b.png</Snapshot>\n"
+        b"        <Viewpoint>Viewpoint_e4f5a6b7-c8d9-4e0f-9a1b-2c3d4e5f6a7b.bcfv</Viewpoint>",
+    ),
+    (
+        "2.1 Snapshot before Viewpoint",
+        "sample-2.1-review",
+        lambda e: e.endswith("/markup.bcf"),
+        (b"<Viewpoint>Viewpoint_e4f5a6b7", b"</Snapshot>"),
+        b"<Snapshot>Snapshot_e4f5a6b7-c8d9-4e0f-9a1b-2c3d4e5f6a7b.png</Snapshot>\n"
+        b"    <Viewpoint>Viewpoint_e4f5a6b7-c8d9-4e0f-9a1b-2c3d4e5f6a7b.bcfv</Viewpoint>",
     ),
     (
         "2.1 empty Exceptions",

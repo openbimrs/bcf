@@ -9,7 +9,8 @@ mod fixture;
 
 use openbim_bcf::write::{
     self, Camera, ClippingPlane, Coloring, Comment, Compression, Document, Extensions, Invalid,
-    Options, Projection, TargetVersion, Topic, Vector3, Viewpoint, Visibility, WriteError,
+    Options, Projection, Snapshot, TargetVersion, Topic, Vector3, Viewpoint, Visibility,
+    WriteError,
 };
 use openbim_bcf::{BcfVersion, Component, Markup};
 use openbim_core::Detected;
@@ -136,6 +137,8 @@ fn assert_read_back(stem: &str, doc: &Document, read: &[&Markup]) {
                 .unwrap_or_else(|| panic!("{stem}: viewpoint {} unread", wv.guid));
             assert_eq!(vis.guid.as_deref(), Some(wv.guid.as_str()), "{stem}");
             assert_eq!(vis.selection, wv.selection, "{stem}");
+            // The markup names the snapshot exactly when one was written.
+            assert_eq!(rv.snapshot.is_some(), wv.snapshot.is_some(), "{stem}");
         }
     }
 }
@@ -588,6 +591,20 @@ fn malformed_values_are_refused_with_their_location() {
             |p| matches!(p, Invalid::SurroundingWhitespace { .. }),
         ),
         (
+            "snapshot that is not a PNG",
+            TargetVersion::V2_1,
+            |d| d.topics[0].viewpoints[0].snapshot = Some(Snapshot::png(*b"GIF89a....")),
+            "topics[0].viewpoints[0].snapshot",
+            |p| matches!(p, Invalid::Snapshot),
+        ),
+        (
+            "empty snapshot",
+            TargetVersion::V3_0,
+            |d| d.topics[0].viewpoints[0].snapshot = Some(Snapshot::png(Vec::new())),
+            "topics[0].viewpoints[0].snapshot",
+            |p| matches!(p, Invalid::Snapshot),
+        ),
+        (
             "no topics at all",
             TargetVersion::V3_0,
             |d| d.topics.clear(),
@@ -947,4 +964,102 @@ fn due_date_and_assignee_sit_at_their_schema_position() {
             "{v:?}:\n{xml}"
         );
     }
+}
+
+// --- snapshots -----------------------------------------------------------------
+
+/// Read back through the reader, the markup's snapshot reference names an
+/// entry the archive lists, and that entry holds exactly the supplied bytes.
+#[test]
+fn snapshots_round_trip_byte_for_byte() {
+    for v in [TargetVersion::V2_1, TargetVersion::V3_0] {
+        let mut doc = minimal(v);
+        doc.topics[0].viewpoints[0].snapshot = Some(Snapshot::png(fixture::RED_PIXEL_PNG));
+        let bytes = write::to_vec(&doc).unwrap();
+
+        let archive = openbim_bcf::read_slice(&bytes).unwrap();
+        assert!(
+            archive.diagnostics().is_empty(),
+            "{v:?}: {:?}",
+            archive.diagnostics()
+        );
+        let reference = archive.topics().next().unwrap().viewpoints[0]
+            .snapshot
+            .clone()
+            .expect("the markup references the snapshot");
+        assert_eq!(reference, format!("Snapshot_{V}.png"));
+        let entry = format!("{T}/{reference}");
+        assert!(
+            archive.entries().contains(&entry),
+            "{v:?}: {:?}",
+            archive.entries()
+        );
+
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+        let mut png = Vec::new();
+        std::io::Read::read_to_end(&mut zip.by_name(&entry).unwrap(), &mut png).unwrap();
+        assert_eq!(
+            png,
+            fixture::RED_PIXEL_PNG,
+            "{v:?}: bytes are written verbatim"
+        );
+    }
+}
+
+/// Entry order stays fixed: each snapshot directly after its viewpoint's
+/// `.bcfv`; and in the markup `Snapshot` follows `Viewpoint`.
+#[test]
+fn a_snapshot_follows_its_viewpoint() {
+    for v in [TargetVersion::V2_1, TargetVersion::V3_0] {
+        let mut doc = minimal(v);
+        doc.topics[0].viewpoints[0].snapshot = Some(Snapshot::png(fixture::RED_PIXEL_PNG));
+        let archive = openbim_bcf::read_slice(&write::to_vec(&doc).unwrap()).unwrap();
+        let entries = archive.entries();
+        let at = |name: String| entries.iter().position(|e| *e == name).unwrap();
+        assert_eq!(
+            at(format!("{T}/Viewpoint_{V}.bcfv")) + 1,
+            at(format!("{T}/Snapshot_{V}.png")),
+            "{v:?}: {entries:?}"
+        );
+        let xml = entry_text(&doc, &format!("{T}/markup.bcf"));
+        assert!(
+            xml.contains(&format!("<Viewpoint>Viewpoint_{V}.bcfv</Viewpoint>\n")),
+            "{xml}"
+        );
+        let vp = xml.find("<Viewpoint>Viewpoint_").unwrap();
+        let snap = xml.find("<Snapshot>").unwrap();
+        assert!(vp < snap, "{v:?}: Snapshot must follow Viewpoint\n{xml}");
+    }
+}
+
+/// Without a snapshot, neither the entry nor the markup reference exists.
+#[test]
+fn no_snapshot_writes_neither_entry_nor_reference() {
+    for v in [TargetVersion::V2_1, TargetVersion::V3_0] {
+        let doc = minimal(v);
+        let archive = openbim_bcf::read_slice(&write::to_vec(&doc).unwrap()).unwrap();
+        assert!(
+            !archive.entries().iter().any(|e| std::path::Path::new(e)
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))),
+            "{v:?}"
+        );
+        assert!(
+            !entry_text(&doc, &format!("{T}/markup.bcf")).contains("Snapshot"),
+            "{v:?}"
+        );
+    }
+}
+
+#[test]
+fn a_non_png_snapshot_writes_nothing() {
+    let path = std::env::temp_dir().join(format!(
+        "openbim-bcf-snapshot-{}.bcfzip",
+        std::process::id()
+    ));
+    let mut doc = minimal(TargetVersion::V3_0);
+    // A JPEG signature: valid in BCF, but not what this crate writes yet.
+    doc.topics[0].viewpoints[0].snapshot = Some(Snapshot::png(*b"\xff\xd8\xff\xe0JFIF"));
+    assert!(write::to_path(&doc, &path).is_err());
+    assert!(!path.exists(), "{} was created", path.display());
 }
