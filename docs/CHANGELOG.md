@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `write::Topic` gained `assigned_to` and `due_date` (#11), written as
+  `Topic/DueDate` and `Topic/AssignedTo` at their schema position in 2.1 and
+  3.0, and read back unchanged. The due date must be an `xs:dateTime`; the
+  assignee is text like every other field. In 3.0 the assignee is a project
+  user: it must be listed in supplied `Extensions::users`, and derived
+  extensions list every assignee under `Users` in first-use order.
+
 ### Security
 
 - **quick-xml 0.37 → 0.42** (#3), clearing RUSTSEC-2026-0194 (quadratic

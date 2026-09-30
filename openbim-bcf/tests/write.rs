@@ -115,6 +115,8 @@ fn assert_read_back(stem: &str, doc: &Document, read: &[&Markup]) {
             t.creation_author.as_deref(),
             Some(w.creation_author.as_str())
         );
+        assert_eq!(t.assigned_to, w.assigned_to, "{stem}");
+        assert_eq!(t.due_date, w.due_date, "{stem}");
 
         assert_eq!(r.comments.len(), w.comments.len(), "{stem}");
         for (wc, rc) in w.comments.iter().zip(&r.comments) {
@@ -565,6 +567,27 @@ fn malformed_values_are_refused_with_their_location() {
             |p| matches!(p, Invalid::Number { .. }),
         ),
         (
+            "due date without a time",
+            TargetVersion::V2_1,
+            |d| d.topics[0].due_date = Some("2026-10-15".into()),
+            "topics[0].due_date",
+            |p| matches!(p, Invalid::DateTime { .. }),
+        ),
+        (
+            "blank assignee",
+            TargetVersion::V3_0,
+            |d| d.topics[0].assigned_to = Some("   ".into()),
+            "topics[0].assigned_to",
+            |p| matches!(p, Invalid::Blank),
+        ),
+        (
+            "assignee with surrounding whitespace",
+            TargetVersion::V2_1,
+            |d| d.topics[0].assigned_to = Some("a@example.com ".into()),
+            "topics[0].assigned_to",
+            |p| matches!(p, Invalid::SurroundingWhitespace { .. }),
+        ),
+        (
             "no topics at all",
             TargetVersion::V3_0,
             |d| d.topics.clear(),
@@ -588,6 +611,7 @@ fn vocabulary() -> Extensions {
         topic_statuses: vec!["Open".into()],
         priorities: vec!["High".into()],
         topic_labels: vec!["MEP".into()],
+        users: vec!["a@example.com".into()],
         ..Extensions::default()
     }
 }
@@ -596,7 +620,7 @@ fn vocabulary() -> Extensions {
 #[test]
 fn values_missing_from_supplied_extensions_are_refused() {
     type Mutation = fn(&mut Topic);
-    let cases: [(&str, Mutation, &str); 4] = [
+    let cases: [(&str, Mutation, &str); 5] = [
         (
             "type",
             |t| t.topic_type = Some("Error".into()),
@@ -617,12 +641,18 @@ fn values_missing_from_supplied_extensions_are_refused() {
             |t| t.labels = vec!["MEP".into(), "ARC".into()],
             "topics[0].labels[1]",
         ),
+        (
+            "assignee",
+            |t| t.assigned_to = Some("stranger@example.com".into()),
+            "topics[0].assigned_to",
+        ),
     ];
     for version in [TargetVersion::V2_1, TargetVersion::V3_0] {
         let mut ok = minimal(version);
         ok.extensions = Some(vocabulary());
         ok.topics[0].priority = Some("High".into());
         ok.topics[0].labels = vec!["MEP".into()];
+        ok.topics[0].assigned_to = Some("a@example.com".into());
         write::to_vec(&ok).unwrap();
 
         for (label, mutate, at) in cases {
@@ -873,6 +903,48 @@ fn styled_viewpoints_read_back_without_diagnostics() {
             archive.diagnostics().is_empty(),
             "{stem}: {:?}",
             archive.diagnostics()
+        );
+    }
+}
+
+// --- assignee and due date ---------------------------------------------------
+
+fn entry_text(doc: &Document, name: &str) -> String {
+    let bytes = write::to_vec(doc).unwrap();
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+    let mut xml = String::new();
+    std::io::Read::read_to_string(&mut zip.by_name(name).unwrap(), &mut xml).unwrap();
+    xml
+}
+
+/// Derived 3.0 `Users` list every assignee in first-use order, and nobody
+/// else: creation and comment authors are not added.
+#[test]
+fn derived_3_0_users_are_the_assignees_in_first_use_order() {
+    let (_, doc) = fixture::samples()
+        .into_iter()
+        .find(|(s, _)| *s == "sample-3.0-review-derived-extensions")
+        .unwrap();
+    let xml = entry_text(&doc, "extensions.xml");
+    assert!(
+        xml.contains("  <Users>\n    <User>reviewer@example.com</User>\n    <User>checker@example.com</User>\n  </Users>\n"),
+        "{xml}"
+    );
+}
+
+/// `DueDate` precedes `AssignedTo`, both between `CreationAuthor` and
+/// `Description`, as the Topic sequence orders them in both schemas.
+#[test]
+fn due_date_and_assignee_sit_at_their_schema_position() {
+    for v in [TargetVersion::V2_1, TargetVersion::V3_0] {
+        let mut doc = minimal(v);
+        doc.topics[0].description = Some("d".into());
+        doc.topics[0].due_date = Some("2026-10-15T17:00:00Z".into());
+        doc.topics[0].assigned_to = Some("a@example.com".into());
+        let xml = entry_text(&doc, &format!("{T}/markup.bcf"));
+        assert!(
+            xml.contains("    <CreationAuthor>a@example.com</CreationAuthor>\n    <DueDate>2026-10-15T17:00:00Z</DueDate>\n    <AssignedTo>a@example.com</AssignedTo>\n    <Description>d</Description>\n"),
+            "{v:?}:\n{xml}"
         );
     }
 }

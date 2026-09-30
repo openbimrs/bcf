@@ -180,6 +180,12 @@ impl Ctx<'_> {
         }
         date(&format!("{at}.creation_date"), &t.creation_date)?;
         text(&format!("{at}.creation_author"), &t.creation_author)?;
+        if let Some(d) = &t.due_date {
+            date(&format!("{at}.due_date"), d)?;
+        }
+        if let Some(a) = &t.assigned_to {
+            self.listed(&format!("{at}.assigned_to"), a, |e| &e.users)?;
+        }
         if let Some(d) = &t.description {
             text(&format!("{at}.description"), d)?;
         }
@@ -422,6 +428,9 @@ fn derive_extensions(topics: &[Topic]) -> Extensions {
         for v in &t.labels {
             push(&mut ext.topic_labels, v);
         }
+        if let Some(v) = &t.assigned_to {
+            push(&mut ext.users, v);
+        }
     }
     ext
 }
@@ -616,6 +625,14 @@ fn markup_xml(version: TargetVersion, t: &Topic) -> Vec<u8> {
     }
     x.leaf("CreationDate", &t.creation_date);
     x.leaf("CreationAuthor", &t.creation_author);
+    // Topic sequence: … CreationAuthor, ModifiedDate?, ModifiedAuthor?,
+    // DueDate?, AssignedTo?, Stage?, Description? … in 2.1 and 3.0 alike.
+    if let Some(d) = &t.due_date {
+        x.leaf("DueDate", d);
+    }
+    if let Some(a) = &t.assigned_to {
+        x.leaf("AssignedTo", a);
+    }
     if let Some(d) = &t.description {
         x.leaf("Description", d);
     }

@@ -150,6 +150,13 @@ NEGATIVE_CONTROLS = [
         b"",
     ),
     (
+        "3.0 AssignedTo before DueDate",
+        "sample-3.0-review",
+        lambda e: e.endswith("/markup.bcf"),
+        (b"<DueDate>2026-10-15T17:00:00+02:00</DueDate>\n    <AssignedTo>", b"</AssignedTo>"),
+        b"<AssignedTo>reviewer@example.com</AssignedTo>\n    <DueDate>2026-10-15T17:00:00+02:00</DueDate>",
+    ),
+    (
         "2.1 empty Exceptions",
         "sample-2.1-styled",
         lambda e: e.endswith(".bcfv"),

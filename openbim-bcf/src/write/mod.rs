@@ -75,7 +75,7 @@
 //! # Scope
 //!
 //! Topics carry GUID, title, description, type, status, priority, labels,
-//! creation author and date, comments, and viewpoints. A viewpoint carries a
+//! creation author and date, assignee, due date, comments, and viewpoints. A viewpoint carries a
 //! component selection, visibility with exceptions, colouring, clipping
 //! planes, and optionally a camera. Header files, snapshots, lines, bitmaps,
 //! view setup hints, document references, and `project.bcfp` are not
@@ -120,8 +120,8 @@ pub struct Document {
     pub version: TargetVersion,
     /// The project's vocabulary.
     ///
-    /// When supplied, every topic's type, status, priority, and labels must
-    /// be listed in it. For 3.0 it is written as `extensions.xml`; when
+    /// When supplied, every topic's type, status, priority, labels, and
+    /// assignee must be listed in it. For 3.0 it is written as `extensions.xml`; when
     /// `None`, a 3.0 archive gets one listing exactly the values the topics
     /// use, in order of first use. For 2.1 it is a check only: 2.1 expresses
     /// the vocabulary as an `extensions.xsd`, which this crate does not write.
@@ -141,8 +141,8 @@ pub struct Extensions {
     pub priorities: Vec<String>,
     /// Allowed labels.
     pub topic_labels: Vec<String>,
-    /// Known users. Written, not checked: this crate writes no field the 3.0
-    /// schema ties to it.
+    /// Known users. When supplied, every topic's `assigned_to` must be
+    /// listed; creation and comment authors are not checked against it.
     pub users: Vec<String>,
     /// Allowed `BimSnippet` types. Written, not checked.
     pub snippet_types: Vec<String>,
@@ -174,6 +174,11 @@ pub struct Topic {
     pub creation_date: String,
     /// Creation author.
     pub creation_author: String,
+    /// Who the topic is assigned to. In 3.0 a user of the project: listed in
+    /// supplied [`Extensions::users`], or added to the derived ones.
+    pub assigned_to: Option<String>,
+    /// When the topic is due, an `xs:dateTime`.
+    pub due_date: Option<String>,
     /// Comments, in order.
     pub comments: Vec<Comment>,
     /// Viewpoints, in order.

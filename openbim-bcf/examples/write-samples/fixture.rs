@@ -27,6 +27,15 @@ pub fn samples() -> Vec<(&'static str, Document)> {
         ),
         ("sample-2.1-styled", styled(TargetVersion::V2_1)),
         ("sample-3.0-styled", styled(TargetVersion::V3_0)),
+        ("sample-2.1-review", review(TargetVersion::V2_1, None)),
+        (
+            "sample-3.0-review",
+            review(TargetVersion::V3_0, Some(extensions())),
+        ),
+        (
+            "sample-3.0-review-derived-extensions",
+            review(TargetVersion::V3_0, None),
+        ),
     ]
 }
 
@@ -62,6 +71,8 @@ fn sample(version: TargetVersion, extensions: Option<Extensions>) -> Document {
                 labels: vec!["MEP".into(), "Struktur".into()],
                 creation_date: "2026-09-26T10:00:00Z".into(),
                 creation_author: "checker@example.com".into(),
+                assigned_to: None,
+                due_date: None,
                 comments: vec![
                     Comment {
                         guid: "0b7c3c1e-9d0a-4d2b-8f55-1a2b3c4d5e6f".into(),
@@ -251,5 +262,52 @@ fn styled(version: TargetVersion) -> Document {
             ],
             ..Topic::default()
         }],
+    }
+}
+
+/// Review metadata: assignees and due dates, including one topic assigned to
+/// a user no other topic uses, so the derived 3.0 `Users` list is exercised.
+fn review(version: TargetVersion, extensions: Option<Extensions>) -> Document {
+    let v3 = version == TargetVersion::V3_0;
+    let topic =
+        |guid: &str, title: &str, assigned_to: Option<&str>, due_date: Option<&str>| Topic {
+            guid: guid.into(),
+            title: title.into(),
+            description: Some("Raised in design review.".into()),
+            topic_type: Some("Info".into()),
+            topic_status: Some("Open".into()),
+            creation_date: "2026-09-30T08:00:00Z".into(),
+            creation_author: "checker@example.com".into(),
+            assigned_to: assigned_to.map(Into::into),
+            due_date: due_date.map(Into::into),
+            ..Topic::default()
+        };
+    Document {
+        version,
+        extensions,
+        topics: vec![
+            topic(
+                "b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e",
+                "Stützenraster prüfen",
+                Some("reviewer@example.com"),
+                Some("2026-10-15T17:00:00+02:00"),
+            ),
+            topic(
+                "c2d3e4f5-a6b7-4c8d-9e0f-1a2b3c4d5e6f",
+                "Due, not yet assigned",
+                None,
+                Some("2026-10-31T12:00:00Z"),
+            ),
+            topic(
+                "d3e4f5a6-b7c8-4d9e-8f1a-2b3c4d5e6f7a",
+                "Assigned, no deadline",
+                Some(if v3 {
+                    "checker@example.com"
+                } else {
+                    "Planungsbüro Müller"
+                }),
+                None,
+            ),
+        ],
     }
 }
