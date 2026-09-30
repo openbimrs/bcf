@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **quick-xml 0.37 → 0.42** (#3), clearing RUSTSEC-2026-0194 (quadratic
+  duplicate-attribute check) and RUSTSEC-2026-0195 (unbounded namespace
+  allocation in `NsReader`). `cargo deny check advisories` now passes. The
+  practical exposure was low: the reader already skipped the duplicate check
+  (`with_checks(false)`) and never used `NsReader`.
+
+### Changed
+
+- **Line endings in read text are normalised to `\n`**, as XML 1.0 section
+  2.11 requires of every parser; quick-xml 0.37 did not. Measured: 6 text
+  values in the official corpus (CRLF descriptions and comments) now read
+  with `\n`; nothing else the reader returns changed on any of the 71
+  official archives. A CR spelled `&#xD;`, as this crate's writer spells it,
+  is kept. Attribute values get the spec's whitespace normalisation likewise,
+  character references exempt.
+
 ## [0.5.0] - 2026-09-28
 
 ### Changed

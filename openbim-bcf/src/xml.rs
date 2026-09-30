@@ -12,8 +12,9 @@
 //! So markup is parsed into a small generic tree and interpreted afterwards by
 //! version-aware code that can report what it tolerated.
 
+use quick_xml::escape::resolve_predefined_entity;
 use quick_xml::events::Event;
-use quick_xml::Reader;
+use quick_xml::{Reader, XmlVersion};
 
 /// A parsed XML element: name, attributes, text, and children, all verbatim.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -74,18 +75,20 @@ impl Node {
 /// Strip any namespace prefix. BCF markup is unprefixed in every published
 /// schema, but writers in the corpus declare `xsd`/`xsi` prefixes and a few
 /// prefix their own elements; the local name is what carries meaning.
-fn local_name(raw: &[u8]) -> String {
-    let s = String::from_utf8_lossy(raw);
-    match s.rsplit_once(':') {
+fn local_name(raw: &str) -> String {
+    match raw.rsplit_once(':') {
         Some((_, local)) => local.to_string(),
-        None => s.into_owned(),
+        None => raw.to_string(),
     }
 }
 
 /// Parse a markup document into a tree.
 ///
 /// Accepts a leading UTF-8 BOM and CRLF line endings, both of which appear in
-/// the corpus, and decodes per the XML declaration's encoding.
+/// the corpus. Text and attribute values are normalised as the XML
+/// specification requires of every parser: line endings become `\n`, and
+/// whitespace in attribute values becomes spaces — except where a character
+/// reference such as `&#xD;` spells it, which is how a writer keeps it.
 pub(crate) fn parse(bytes: &[u8]) -> Result<Node, String> {
     let mut reader = Reader::from_reader(bytes);
     let config = reader.config_mut();
@@ -95,15 +98,18 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<Node, String> {
     let mut stack: Vec<Node> = Vec::new();
     let mut root: Option<Node> = None;
     let mut buf = Vec::new();
+    // Normalisation rules differ between XML 1.0 and 1.1; the declaration
+    // says which, and its absence means 1.0.
+    let mut version = XmlVersion::Implicit1_0;
 
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
-                let node = build_node(&e, &reader).map_err(|e| e.to_string())?;
+                let node = build_node(&e, version).map_err(|e| e.to_string())?;
                 stack.push(node);
             }
             Ok(Event::Empty(e)) => {
-                let node = build_node(&e, &reader).map_err(|e| e.to_string())?;
+                let node = build_node(&e, version).map_err(|e| e.to_string())?;
                 match stack.last_mut() {
                     Some(parent) => parent.children.push(node),
                     None => root = Some(node),
@@ -116,15 +122,38 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<Node, String> {
                     None => root = Some(node),
                 }
             }
+            Ok(Event::Decl(d)) => {
+                version = d.xml_version().map_err(|e| e.to_string())?;
+            }
             Ok(Event::Text(t)) => {
                 if let Some(top) = stack.last_mut() {
-                    let decoded = t.unescape().map_err(|e| e.to_string())?;
-                    top.text.push_str(decoded.as_ref());
+                    top.text.push_str(&t.xml_content(version));
+                }
+            }
+            // References arrive as their own events, between the text around
+            // them. Only the five predefined entities and character references
+            // exist without a DTD; any other name is an error, as it is for
+            // every conforming parser.
+            Ok(Event::GeneralRef(r)) => {
+                if let Some(top) = stack.last_mut() {
+                    match r.resolve_char_ref().map_err(|e| e.to_string())? {
+                        Some(ch) => top.text.push(ch),
+                        None => match resolve_predefined_entity(&r) {
+                            Some(s) => top.text.push_str(s),
+                            None => {
+                                return Err(format!(
+                                    "unknown entity &{}; at byte {}",
+                                    &*r,
+                                    reader.buffer_position()
+                                ))
+                            }
+                        },
+                    }
                 }
             }
             Ok(Event::CData(t)) => {
                 if let Some(top) = stack.last_mut() {
-                    top.text.push_str(&String::from_utf8_lossy(t.as_ref()));
+                    top.text.push_str(&t.xml_content(version));
                 }
             }
             Ok(Event::Eof) => break,
@@ -150,18 +179,19 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<Node, String> {
 
 fn build_node(
     e: &quick_xml::events::BytesStart<'_>,
-    reader: &Reader<&[u8]>,
+    version: XmlVersion,
 ) -> Result<Node, quick_xml::Error> {
     let mut node = Node {
         name: local_name(e.name().as_ref()),
         ..Node::default()
     };
+    // `with_checks(false)`: a repeated attribute is tolerated (the first one
+    // wins in `Node::attr`), not a reason to lose the document. It also skips
+    // the duplicate-name scan that RUSTSEC-2026-0194 made quadratic.
     for attr in e.attributes().with_checks(false) {
         let attr = attr.map_err(quick_xml::Error::from)?;
         let key = local_name(attr.key.as_ref());
-        let value = attr
-            .decode_and_unescape_value(reader.decoder())?
-            .into_owned();
+        let value = attr.normalized_value(version)?.into_owned();
         node.attrs.push((key, value));
     }
     Ok(node)
@@ -234,6 +264,57 @@ mod tests {
         let doc = parse(br#"<Markup><Topic Guid="g"><Title>T</Title>"#).unwrap();
         assert_eq!(doc.name, "Markup");
         assert_eq!(doc.child("Topic").unwrap().attr("Guid"), Some("g"));
+    }
+
+    /// XML 1.0 section 2.11: a parser delivers line breaks as `\n`. A CR the
+    /// writer means to keep is spelled `&#xD;`, which survives.
+    #[test]
+    fn line_endings_are_normalised_but_character_references_are_kept() {
+        let doc = parse(b"<M><A>one\r\ntwo\rthree</A><B>one&#xD;\ntwo</B></M>").unwrap();
+        assert_eq!(doc.child("A").unwrap().text, "one\ntwo\nthree");
+        assert_eq!(doc.child("B").unwrap().text, "one\r\ntwo");
+    }
+
+    /// Attribute-value normalisation turns literal whitespace into spaces;
+    /// character references are exempt, which is how the writer keeps a tab
+    /// or line break in an attribute.
+    #[test]
+    fn attribute_whitespace_is_normalised_except_character_references() {
+        let doc =
+            parse(b"<M A=\"a\tb\nc\" B=\"a&#x9;b&#xA;c&#xD;\" C=\"&lt;&amp;&gt;&quot;&apos;\"/>")
+                .unwrap();
+        assert_eq!(doc.attr("A"), Some("a b c"));
+        assert_eq!(doc.attr("B"), Some("a\tb\nc\r"));
+        assert_eq!(doc.attr("C"), Some("<&>\"'"));
+    }
+
+    #[test]
+    fn predefined_entities_and_character_references_resolve_in_text() {
+        let doc = parse("<M>&lt;&amp;&gt;&quot;&apos; &#228;&#x1F600;</M>".as_bytes()).unwrap();
+        assert_eq!(doc.text, "<&>\"' ä😀");
+    }
+
+    /// Without a DTD only the five predefined entities exist. An unknown one
+    /// fails the document, which the archive reports as `UnreadableMarkup`
+    /// while reading the rest — as with quick-xml 0.37.
+    #[test]
+    fn an_unknown_entity_is_an_error_not_silently_dropped() {
+        let err = parse(b"<M>a &nbsp; b</M>").unwrap_err();
+        assert!(err.contains("nbsp"), "{err}");
+    }
+
+    /// Repeated attributes are tolerated rather than failing the document;
+    /// the first one wins.
+    #[test]
+    fn a_repeated_attribute_keeps_the_first_value() {
+        let doc = parse(br#"<Topic Guid="a" Guid="b"/>"#).unwrap();
+        assert_eq!(doc.attr("Guid"), Some("a"));
+    }
+
+    #[test]
+    fn an_xml_1_1_declaration_is_accepted() {
+        let doc = parse(b"<?xml version=\"1.1\"?><M><A>x\r\ny</A></M>").unwrap();
+        assert_eq!(doc.child("A").unwrap().text, "x\ny");
     }
 
     #[test]
