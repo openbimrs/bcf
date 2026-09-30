@@ -25,7 +25,7 @@ for d in archive.diagnostics() {
 
 ```toml
 [dependencies]
-openbim-bcf = "0.5"
+openbim-bcf = "0.6"
 ```
 
 ## Tolerance, and why it is not laxness

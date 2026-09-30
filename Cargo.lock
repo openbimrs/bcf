@@ -73,7 +73,7 @@ dependencies = [
 
 [[package]]
 name = "openbim-bcf"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "openbim-core",
  "quick-xml",
