@@ -639,7 +639,7 @@ mod tests {
         )
         .unwrap();
         assert!(m.viewpoints.is_empty(), "{:?}", m.viewpoints);
-        assert!(m.comments.is_empty());
+        assert_eq!(m.comments, []);
     }
 
     #[test]
