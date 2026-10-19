@@ -73,9 +73,14 @@ fn zip_metadata_is_fixed() {
                 f.last_modified(),
                 Some(zip::DateTime::default()),
                 "{stem}: {}",
-                f.name()
+                f.name().unwrap()
             );
-            assert_eq!(f.unix_mode(), Some(0o100_644), "{stem}: {}", f.name());
+            assert_eq!(
+                f.unix_mode(),
+                Some(0o100_644),
+                "{stem}: {}",
+                f.name().unwrap()
+            );
         }
     }
 }
