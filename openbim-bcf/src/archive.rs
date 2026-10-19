@@ -151,7 +151,10 @@ fn scan_entries<R: Read + Seek>(
     for i in 0..zip.len() {
         // `by_index_raw` reads the header without decompressing the payload.
         let file = zip.by_index_raw(i).map_err(zip_err)?;
-        let raw = file.name().to_string();
+        // zip 9 decodes a name as UTF-8, else CP437 (every byte maps), so
+        // this cannot fail on real archives; if it ever does, the central
+        // directory is unreadable rather than one entry being skippable.
+        let raw = file.name().map_err(zip_err)?.into_owned();
         if raw.contains('\\') {
             diagnostics.push(Diagnostic::in_archive(Tolerance::BackslashSeparator {
                 name: raw.clone(),

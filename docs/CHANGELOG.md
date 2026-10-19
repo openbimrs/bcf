@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **zip 8 → 9** (#15), clearing RUSTSEC-2026-0367, -0368 and -0369. All
+  three are in zip's `extract()`, which this crate never calls (the reader
+  reads entries through a bounded path and refuses traversal itself), but
+  `cargo deny check advisories` flags any zip 8 in a tree. No public API
+  change, MSRV stays 1.88, and the licences in the tree are unchanged.
+- Measured: the full parsed model of all 71 official archives (topics,
+  comments, viewpoints, diagnostics, entry names) is identical to 0.6.0's,
+  and all eight golden files are byte-identical.
+
 ## [0.6.0] - 2026-09-30
 
 ### Added
