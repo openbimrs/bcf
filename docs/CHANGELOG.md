@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **MSRV 1.88 → 1.99** (#18). The repository pins Rust 1.99.1 in
+  `rust-toolchain.toml`, and CI and the release gate build with it, so
+  every openbimrs repository shares one compiler (and one build cache).
+  `rust-version` is now `"1.99"`; no public API change.
+
 ## [0.6.1] - 2026-10-19
 
 ### Security
