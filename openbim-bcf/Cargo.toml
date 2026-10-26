@@ -2,7 +2,7 @@
 name = "openbim-bcf"
 version = "0.6.1"
 edition = "2021"
-rust-version = "1.88"
+rust-version = "1.99"
 license = "AGPL-3.0-or-later"
 authors = ["OpenBIM.rs contributors"]
 repository = "https://github.com/openbimrs/bcf"
