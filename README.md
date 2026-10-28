@@ -188,5 +188,6 @@ The official corpus is fetched, not vendored (CC BY-ND); see
 
 ## Licence
 
-Repository-authored code is AGPL-3.0-or-later. The buildingSMART reference
+Repository-authored code is `AGPL-3.0-or-later OR LicenseRef-Commercial`
+(see [LICENSING.md](LICENSING.md)). The buildingSMART reference
 corpus is CC BY-ND 4.0 and is never committed here.

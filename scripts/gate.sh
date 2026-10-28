@@ -37,3 +37,19 @@ fi
 ./scripts/check-references-untracked.sh
 
 cargo package --locked -p openbim-bcf
+
+# The crate is `AGPL-3.0-or-later OR LicenseRef-Commercial`: its archive ships
+# byte-identical copies of the root licence texts and notice.
+version="$(cargo metadata --format-version 1 --no-deps \
+  | python3 -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"]=="openbim-bcf"))')"
+package_root="${CARGO_TARGET_DIR:-target}/package/openbim-bcf-${version}"
+for f in LICENSE NOTICE LICENSES/LicenseRef-Commercial.txt; do
+  cmp -s "$f" "$package_root/$f" || {
+    echo "packaged crate: $f is missing or differs from the root" >&2
+    exit 1
+  }
+done
+grep -qx 'license = "AGPL-3.0-or-later OR LicenseRef-Commercial"' "$package_root/Cargo.toml" || {
+  echo "packaged crate: unexpected license expression" >&2
+  exit 1
+}

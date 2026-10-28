@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-10-28
+
+### Changed
+
+- **Licence:** `AGPL-3.0-or-later OR LicenseRef-Commercial` (was
+  `AGPL-3.0-or-later`); a commercial licence is available from the copyright
+  holder named in `NOTICE`. See `LICENSING.md`. The crate ships `LICENSE`,
+  `NOTICE` and `LICENSES/LicenseRef-Commercial.txt`. No code change.
+
 ## [0.7.0] - 2026-10-26
 
 ### Changed
@@ -206,7 +215,8 @@ else.
   placement was consulted, losing 9 comments across the official corpus.
 - `Topic/Labels/Label` (3.0) is read in addition to repeated `Labels` (2.x).
 
-[Unreleased]: https://github.com/openbimrs/bcf/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/openbimrs/bcf/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/openbimrs/bcf/releases/tag/v0.7.1
 [0.7.0]: https://github.com/openbimrs/bcf/releases/tag/v0.7.0
 [0.6.1]: https://github.com/openbimrs/bcf/releases/tag/v0.6.1
 [0.6.0]: https://github.com/openbimrs/bcf/releases/tag/v0.6.0

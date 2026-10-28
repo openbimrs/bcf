@@ -18,7 +18,7 @@ suite means nothing unless the suite can fail.
 
 ## Project conventions
 
-- Rust 2021, MSRV 1.99 (pinned 1.99.1 in `rust-toolchain.toml`), AGPL-3.0-or-later, `#![forbid(unsafe_code)]`, pure Rust.
+- Rust 2021, MSRV 1.99 (pinned 1.99.1 in `rust-toolchain.toml`), `AGPL-3.0-or-later OR LicenseRef-Commercial`, `#![forbid(unsafe_code)]`, pure Rust.
 - BCF-specific models, version semantics, tolerance policy, diagnostics, and
   archive safety stay here. Shared openBIM domain vocabulary lives in
   `openbim-core`.
@@ -26,5 +26,5 @@ suite means nothing unless the suite can fail.
 - Do not claim schema validation, write support, or viewpoint geometry without
   executable evidence over the official corpus.
 - Do not commit buildingSMART schemas or test cases: they are CC BY-ND and this repository is
-  AGPL-3.0-or-later. Use `scripts/fetch-official-references.py` locally.
+  `AGPL-3.0-or-later OR LicenseRef-Commercial`. Use `scripts/fetch-official-references.py` locally.
 - Use Keep a Changelog and distinguish implemented capabilities from roadmap.
