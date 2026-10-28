@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-10-28
+
+### Changed
+
+- `NOTICE` names `rheonda` as the copyright holder (was `point-grey`); it
+  holds the commercial licence option. No code change.
+
+0.7.1 was tagged but never published; 0.7.2 is the first dual-licensed
+release on crates.io.
+
 ## [0.7.1] - 2026-10-28
 
 ### Changed
@@ -215,7 +225,8 @@ else.
   placement was consulted, losing 9 comments across the official corpus.
 - `Topic/Labels/Label` (3.0) is read in addition to repeated `Labels` (2.x).
 
-[Unreleased]: https://github.com/openbimrs/bcf/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/openbimrs/bcf/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/openbimrs/bcf/releases/tag/v0.7.2
 [0.7.1]: https://github.com/openbimrs/bcf/releases/tag/v0.7.1
 [0.7.0]: https://github.com/openbimrs/bcf/releases/tag/v0.7.0
 [0.6.1]: https://github.com/openbimrs/bcf/releases/tag/v0.6.1
